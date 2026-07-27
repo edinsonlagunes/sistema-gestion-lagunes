@@ -1,0 +1,55 @@
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+from app.database import Base, engine
+from app.routers import (
+    asistencia,
+    caja,
+    clientes,
+    colaboradores,
+    compras,
+    finanzas,
+    insumos,
+    negocios,
+    proyectos,
+    servicios,
+    usuarios,
+    ventas,
+)
+
+Base.metadata.create_all(bind=engine)
+
+app = FastAPI(
+    title="Sistema de Gestión Lagunes",
+    description="Núcleo: negocios, colaboradores, usuarios, finanzas, insumos y compras.",
+    version="0.1.0",
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # ajustar a tu dominio real antes de producción
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+app.include_router(negocios.router)
+app.include_router(colaboradores.router)
+app.include_router(usuarios.router)
+app.include_router(finanzas.router)
+app.include_router(insumos.router)
+app.include_router(insumos.proveedores_router)
+app.include_router(compras.router)
+app.include_router(servicios.router)
+app.include_router(caja.router)
+app.include_router(ventas.router)
+app.include_router(clientes.router)
+app.include_router(proyectos.router)
+app.include_router(asistencia.router)
+
+
+@app.get("/")
+def raiz():
+    return {
+        "status": "ok",
+        "sistema": "Gestión Lagunes - Fase 1 + 2 (POS) + 3 (Constructora) + 4 (Asistencia)",
+    }
