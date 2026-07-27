@@ -2,9 +2,10 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app import models, schemas
+from app.auth import obtener_usuario_actual
 from app.database import get_db
 
-router = APIRouter(prefix="/proyectos", tags=["Proyectos (Constructora)"])
+router = APIRouter(prefix="/proyectos", tags=["Proyectos (Constructora)"], dependencies=[Depends(obtener_usuario_actual)])
 
 ESTADOS_VALIDOS = {"cotizacion", "en_proceso", "entregado", "cancelado"}
 

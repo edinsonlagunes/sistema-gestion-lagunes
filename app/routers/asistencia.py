@@ -4,9 +4,10 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app import models, schemas
+from app.auth import obtener_usuario_actual
 from app.database import get_db
 
-router = APIRouter(prefix="/asistencia", tags=["Asistencia"])
+router = APIRouter(prefix="/asistencia", tags=["Asistencia"], dependencies=[Depends(obtener_usuario_actual)])
 
 
 def _a_schema(registro: models.Asistencia) -> schemas.Asistencia:

@@ -2,10 +2,13 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app import models, schemas
+from app.auth import obtener_usuario_actual
 from app.database import get_db
 
-router = APIRouter(prefix="/insumos", tags=["Insumos"])
-proveedores_router = APIRouter(prefix="/proveedores", tags=["Proveedores"])
+router = APIRouter(prefix="/insumos", tags=["Insumos"], dependencies=[Depends(obtener_usuario_actual)])
+proveedores_router = APIRouter(
+    prefix="/proveedores", tags=["Proveedores"], dependencies=[Depends(obtener_usuario_actual)]
+)
 
 
 @router.get("/", response_model=list[schemas.Insumo])

@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app import models, schemas
+from app.auth import crear_token, requerir_admin
 from app.database import get_db
 from app.security import hash_password, verify_password
 
@@ -9,7 +10,12 @@ router = APIRouter(prefix="/usuarios", tags=["Usuarios"])
 
 
 @router.post("/", response_model=schemas.Usuario)
-def crear_usuario(data: schemas.UsuarioCreate, db: Session = Depends(get_db)):
+def crear_usuario(
+    data: schemas.UsuarioCreate,
+    db: Session = Depends(get_db),
+    _admin: models.Usuario = Depends(requerir_admin),
+):
+    """Solo un administrador puede dar de alta nuevos usuarios."""
     colaborador = db.query(models.Colaborador).get(data.colaborador_id)
     if not colaborador:
         raise HTTPException(status_code=404, detail="Colaborador no encontrado")
@@ -36,7 +42,10 @@ def login(data: schemas.LoginRequest, db: Session = Depends(get_db)):
         raise HTTPException(status_code=401, detail="Usuario o contraseña incorrectos")
 
     colaborador = usuario.colaborador
+    token = crear_token(usuario.id)
     return {
+        "access_token": token,
+        "token_type": "bearer",
         "usuario_id": usuario.id,
         "username": usuario.username,
         "rol_permiso": usuario.rol_permiso,

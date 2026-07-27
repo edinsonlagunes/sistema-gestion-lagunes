@@ -2,9 +2,10 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app import models, schemas
+from app.auth import obtener_usuario_actual
 from app.database import get_db
 
-router = APIRouter(prefix="/finanzas", tags=["Finanzas"])
+router = APIRouter(prefix="/finanzas", tags=["Finanzas"], dependencies=[Depends(obtener_usuario_actual)])
 
 
 @router.get("/ingresos", response_model=list[schemas.Ingreso])
