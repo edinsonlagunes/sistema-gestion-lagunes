@@ -13,7 +13,7 @@ import os
 from datetime import datetime, timedelta
 
 from fastapi import Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordBearer
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
 from sqlalchemy.orm import Session
 
@@ -24,7 +24,10 @@ SECRET_KEY = os.getenv("SECRET_KEY", "clave-de-desarrollo-cambiar-en-produccion"
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 480  # 8 horas
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="usuarios/login")
+# HTTPBearer hace que /docs muestre un simple cuadro para pegar el token,
+# en vez del formulario de usuario/contraseña de OAuth2 (que espera un
+# formato distinto al que usa nuestro endpoint de login).
+security_scheme = HTTPBearer()
 
 
 def crear_token(usuario_id: int) -> str:
@@ -34,13 +37,15 @@ def crear_token(usuario_id: int) -> str:
 
 
 def obtener_usuario_actual(
-    token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)
+    credenciales: HTTPAuthorizationCredentials = Depends(security_scheme),
+    db: Session = Depends(get_db),
 ) -> models.Usuario:
     error_credenciales = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Sesión inválida o expirada, vuelve a iniciar sesión",
         headers={"WWW-Authenticate": "Bearer"},
     )
+    token = credenciales.credentials
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         usuario_id = payload.get("sub")
