@@ -50,5 +50,6 @@ def login(data: schemas.LoginRequest, db: Session = Depends(get_db)):
         "username": usuario.username,
         "rol_permiso": usuario.rol_permiso,
         "colaborador": colaborador.nombre,
+        "colaborador_id": colaborador.id,
         "negocio_id": colaborador.negocio_id,
     }

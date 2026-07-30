@@ -249,3 +249,30 @@ class Asistencia(Base):
     hora_salida = Column(DateTime, nullable=True)
 
     colaborador = relationship("Colaborador")
+
+
+class RegistroImpresion(Base):
+    """
+    Conteo de impresiones/ploteos (Fase 5). Se alimenta de dos formas:
+    - Manual: un registro a la vez (POST /impresiones/).
+    - Importado: subiendo el reporte que exporte el software de conteo
+      (PaperCut, YSoft SafeQ, u otro) como CSV (POST /impresiones/importar-csv).
+
+    El costo estimado no se guarda aquí: se calcula al pedir el resumen,
+    cruzando categoria/tamaño contra el catálogo de servicios ya existente.
+    """
+    __tablename__ = "registros_impresion"
+
+    id = Column(Integer, primary_key=True, index=True)
+    negocio_id = Column(Integer, ForeignKey("negocios.id"), nullable=False)
+    colaborador_id = Column(Integer, ForeignKey("colaboradores.id"), nullable=True)
+    colaborador_nombre_original = Column(String, nullable=True)  # tal cual venía en el CSV
+    equipo = Column(String, nullable=False)  # nombre/IP de la impresora o plotter
+    tipo_trabajo = Column(String, nullable=False)  # impresion_bn, impresion_color, escaneo, ploteo
+    tamano = Column(String, nullable=True)  # A4, A3, A2, A1, A0
+    cantidad = Column(Float, nullable=False)  # páginas o m2, según el tipo
+    fecha = Column(DateTime, default=datetime.utcnow)
+    origen = Column(String, nullable=False, default="manual")  # manual, csv_import
+
+    negocio = relationship("Negocio")
+    colaborador = relationship("Colaborador")

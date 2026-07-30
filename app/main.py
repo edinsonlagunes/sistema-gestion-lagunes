@@ -9,6 +9,7 @@ from app.routers import (
     colaboradores,
     compras,
     finanzas,
+    impresiones,
     insumos,
     negocios,
     proyectos,
@@ -45,11 +46,12 @@ app.include_router(ventas.router)
 app.include_router(clientes.router)
 app.include_router(proyectos.router)
 app.include_router(asistencia.router)
+app.include_router(impresiones.router)
 
 
 @app.get("/")
 def raiz():
     return {
         "status": "ok",
-        "sistema": "Gestión Lagunes - Fase 1 + 2 (POS) + 3 (Constructora) + 4 (Asistencia)",
+        "sistema": "Gestión Lagunes - Fase 1 a 5 completas",
     }

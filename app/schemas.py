@@ -150,6 +150,17 @@ class ServicioCreate(ServicioBase):
     pass
 
 
+class ServicioUpdate(BaseModel):
+    nombre: Optional[str] = None
+    categoria: Optional[str] = None
+    tamano: Optional[str] = None
+    precio_unitario: Optional[float] = None
+    unidad: Optional[str] = None
+    activo: Optional[bool] = None
+    insumo_id: Optional[int] = None
+    consumo_insumo_por_unidad: Optional[float] = None
+
+
 class Servicio(ServicioBase):
     model_config = ConfigDict(from_attributes=True)
     id: int
@@ -289,6 +300,46 @@ class Asistencia(BaseModel):
     hora_entrada: datetime
     hora_salida: Optional[datetime] = None
     horas_trabajadas: Optional[float] = None
+
+
+# ---------- Registros de impresión/ploteo (Fase 5) ----------
+class RegistroImpresionCreate(BaseModel):
+    negocio_id: int
+    colaborador_id: Optional[int] = None
+    equipo: str
+    tipo_trabajo: str
+    tamano: Optional[str] = None
+    cantidad: float
+    fecha: Optional[datetime] = None
+
+
+class RegistroImpresion(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    negocio_id: int
+    colaborador_id: Optional[int] = None
+    colaborador_nombre_original: Optional[str] = None
+    equipo: str
+    tipo_trabajo: str
+    tamano: Optional[str] = None
+    cantidad: float
+    fecha: datetime
+    origen: str
+
+
+class ImportarCSVResultado(BaseModel):
+    filas_procesadas: int
+    filas_con_error: int
+    errores: list[str]
+
+
+class ResumenImpresionItem(BaseModel):
+    colaborador: str
+    tipo_trabajo: str
+    tamano: Optional[str] = None
+    equipo: str
+    total_cantidad: float
+    costo_estimado: float
 
 
 # ---------- Dashboard ----------
