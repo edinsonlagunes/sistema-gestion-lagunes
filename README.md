@@ -73,6 +73,9 @@ nueva.
 | `POST /proyectos/{id}/ordenes` | Registra un servicio técnico entregado (plano, expediente, estudio de suelos, ploteo). Calcula el subtotal, genera el ingreso y descuenta el insumo vinculado — igual mecanismo que el POS |
 | `PATCH /proyectos/{id}/ordenes/{orden_id}` | Corrige la cantidad de una orden ya registrada, ajustando el ingreso y el insumo por la diferencia — **solo administradores** |
 | `DELETE /proyectos/{id}/ordenes/{orden_id}` | Quita una orden registrada por error: revierte el ingreso y devuelve el insumo al stock — **solo administradores** |
+| `POST /proyectos/{id}/pagos` | Registra un pago recibido (adelanto, cuota o pago final), con monto, fecha del depósito y medio de pago — **solo administradores** |
+| `PATCH/DELETE /proyectos/{id}/pagos/{pago_id}` | Corrige o quita un pago ya registrado — **solo administradores** |
+| `GET /proyectos/resumen-pagos?negocio_id=` | Para el Dashboard: proyectos con saldo pendiente (facturado − pagado), con el monto y fecha del último pago. No incluye proyectos ya cancelados |
 
 **Reutiliza el mismo catálogo `/servicios/`** que ya usa la Librería (basta
 con crear los servicios técnicos con `negocio_id` de la Constructora) — así

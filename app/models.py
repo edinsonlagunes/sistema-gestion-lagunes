@@ -223,13 +223,16 @@ class Proyecto(Base):
     negocio_id = Column(Integer, ForeignKey("negocios.id"), nullable=False)
     cliente_id = Column(Integer, ForeignKey("clientes.id"), nullable=False)
     nombre = Column(String, nullable=False)
-    tipo_proyecto = Column(String, nullable=True)  # elaboracion_planos, ejecucion_obra, otro
+    tipo_proyecto = Column(String, nullable=True)  # texto libre, respaldado por el catálogo TipoProyecto
     estado = Column(String, nullable=False, default="cotizacion")  # cotizacion, en_proceso, entregado, cancelado
     fecha_inicio = Column(DateTime, default=datetime.utcnow)
     fecha_entrega_estimada = Column(DateTime, nullable=True)
 
     cliente = relationship("Cliente", back_populates="proyectos")
     ordenes = relationship("OrdenServicio", back_populates="proyecto", cascade="all, delete-orphan")
+    pagos = relationship(
+        "PagoProyecto", back_populates="proyecto", cascade="all, delete-orphan", order_by="PagoProyecto.fecha_pago"
+    )
 
 
 class OrdenServicio(Base):
@@ -253,6 +256,26 @@ class OrdenServicio(Base):
     proyecto = relationship("Proyecto", back_populates="ordenes")
     servicio = relationship("Servicio")
     colaborador = relationship("Colaborador")
+
+
+class PagoProyecto(Base):
+    """
+    Un pago recibido contra un proyecto: el adelanto inicial, cada cuota,
+    o el pago final. Separado de OrdenServicio a propósito — lo facturado
+    (suma de órdenes) y lo efectivamente cobrado (suma de pagos) son dos
+    cosas distintas; la diferencia es el saldo pendiente.
+    """
+    __tablename__ = "pagos_proyecto"
+
+    id = Column(Integer, primary_key=True, index=True)
+    proyecto_id = Column(Integer, ForeignKey("proyectos.id"), nullable=False)
+    monto = Column(Float, nullable=False)
+    fecha_pago = Column(DateTime, nullable=False, default=datetime.utcnow)
+    tipo = Column(String, nullable=False, default="cuota")  # adelanto, cuota, pago_final, otro
+    medio_pago = Column(String, nullable=False, default="efectivo")
+    descripcion = Column(String, nullable=True)
+
+    proyecto = relationship("Proyecto", back_populates="pagos")
 
 
 class Asistencia(Base):

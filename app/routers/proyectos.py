@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
@@ -11,7 +13,8 @@ ESTADOS_VALIDOS = {"cotizacion", "en_proceso", "entregado", "cancelado"}
 
 
 def _a_detalle(proyecto: models.Proyecto) -> schemas.ProyectoDetalle:
-    total = sum(o.subtotal for o in proyecto.ordenes)
+    total_facturado = sum(o.subtotal for o in proyecto.ordenes)
+    total_pagado = sum(p.monto for p in proyecto.pagos)
     return schemas.ProyectoDetalle(
         id=proyecto.id,
         negocio_id=proyecto.negocio_id,
@@ -22,7 +25,10 @@ def _a_detalle(proyecto: models.Proyecto) -> schemas.ProyectoDetalle:
         fecha_inicio=proyecto.fecha_inicio,
         fecha_entrega_estimada=proyecto.fecha_entrega_estimada,
         ordenes=proyecto.ordenes,
-        total_facturado=total,
+        pagos=proyecto.pagos,
+        total_facturado=total_facturado,
+        total_pagado=total_pagado,
+        saldo_pendiente=total_facturado - total_pagado,
     )
 
 
@@ -57,6 +63,45 @@ def crear_proyecto(data: schemas.ProyectoCreate, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(proyecto)
     return proyecto
+
+
+@router.get("/resumen-pagos", response_model=list[schemas.ResumenPagoProyecto])
+def resumen_pagos(negocio_id: int | None = None, db: Session = Depends(get_db)):
+    """
+    Para el Dashboard: por cada proyecto, cuánto se ha facturado, cuánto
+    se ha cobrado, cuánto falta, y cuándo fue el último pago (el adelanto,
+    si todavía no hay más pagos). Solo incluye proyectos con saldo
+    pendiente, ordenados del que más debe al que menos.
+    """
+    query = db.query(models.Proyecto)
+    if negocio_id is not None:
+        query = query.filter(models.Proyecto.negocio_id == negocio_id)
+    proyectos = query.all()
+
+    resultado = []
+    for p in proyectos:
+        total_facturado = sum(o.subtotal for o in p.ordenes)
+        total_pagado = sum(pago.monto for pago in p.pagos)
+        saldo = total_facturado - total_pagado
+        if saldo <= 0:
+            continue
+
+        ultimo_pago = max(p.pagos, key=lambda pago: pago.fecha_pago) if p.pagos else None
+        resultado.append(
+            schemas.ResumenPagoProyecto(
+                proyecto_id=p.id,
+                nombre=p.nombre,
+                tipo_proyecto=p.tipo_proyecto,
+                total_facturado=total_facturado,
+                total_pagado=total_pagado,
+                saldo_pendiente=saldo,
+                ultimo_pago_monto=ultimo_pago.monto if ultimo_pago else None,
+                ultimo_pago_fecha=ultimo_pago.fecha_pago if ultimo_pago else None,
+            )
+        )
+
+    resultado.sort(key=lambda r: r.saldo_pendiente, reverse=True)
+    return resultado
 
 
 @router.get("/{proyecto_id}", response_model=schemas.ProyectoDetalle)
@@ -240,5 +285,82 @@ def eliminar_orden_servicio(
     db.delete(orden)
     db.commit()
 
+    proyecto = db.query(models.Proyecto).get(proyecto_id)
+    return _a_detalle(proyecto)
+
+
+@router.post("/{proyecto_id}/pagos", response_model=schemas.ProyectoDetalle)
+def registrar_pago(
+    proyecto_id: int,
+    data: schemas.PagoProyectoCreate,
+    db: Session = Depends(get_db),
+    _admin: models.Usuario = Depends(requerir_admin),
+):
+    """
+    Registra un pago recibido contra el proyecto — el adelanto inicial,
+    una cuota, o el pago final. No modifica lo facturado (las órdenes);
+    solo el saldo pendiente, que se recalcula solo. Solo administradores.
+    """
+    proyecto = db.query(models.Proyecto).get(proyecto_id)
+    if not proyecto:
+        raise HTTPException(status_code=404, detail="Proyecto no encontrado")
+
+    pago = models.PagoProyecto(
+        proyecto_id=proyecto.id,
+        monto=data.monto,
+        fecha_pago=data.fecha_pago or datetime.utcnow(),
+        tipo=data.tipo,
+        medio_pago=data.medio_pago,
+        descripcion=data.descripcion,
+    )
+    db.add(pago)
+    db.commit()
+    db.refresh(proyecto)
+    return _a_detalle(proyecto)
+
+
+@router.patch("/{proyecto_id}/pagos/{pago_id}", response_model=schemas.ProyectoDetalle)
+def actualizar_pago(
+    proyecto_id: int,
+    pago_id: int,
+    data: schemas.PagoProyectoUpdate,
+    db: Session = Depends(get_db),
+    _admin: models.Usuario = Depends(requerir_admin),
+):
+    """Corrige un pago ya registrado (monto, fecha, tipo). Solo administradores."""
+    pago = (
+        db.query(models.PagoProyecto)
+        .filter(models.PagoProyecto.id == pago_id, models.PagoProyecto.proyecto_id == proyecto_id)
+        .first()
+    )
+    if not pago:
+        raise HTTPException(status_code=404, detail="Pago no encontrado")
+
+    for campo, valor in data.model_dump(exclude_unset=True).items():
+        setattr(pago, campo, valor)
+
+    db.commit()
+    proyecto = db.query(models.Proyecto).get(proyecto_id)
+    return _a_detalle(proyecto)
+
+
+@router.delete("/{proyecto_id}/pagos/{pago_id}", response_model=schemas.ProyectoDetalle)
+def eliminar_pago(
+    proyecto_id: int,
+    pago_id: int,
+    db: Session = Depends(get_db),
+    _admin: models.Usuario = Depends(requerir_admin),
+):
+    """Quita un pago registrado por error. Solo administradores."""
+    pago = (
+        db.query(models.PagoProyecto)
+        .filter(models.PagoProyecto.id == pago_id, models.PagoProyecto.proyecto_id == proyecto_id)
+        .first()
+    )
+    if not pago:
+        raise HTTPException(status_code=404, detail="Pago no encontrado")
+
+    db.delete(pago)
+    db.commit()
     proyecto = db.query(models.Proyecto).get(proyecto_id)
     return _a_detalle(proyecto)

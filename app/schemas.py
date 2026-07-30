@@ -311,9 +311,50 @@ class Proyecto(ProyectoBase):
     fecha_inicio: datetime
 
 
+class PagoProyectoCreate(BaseModel):
+    monto: float
+    fecha_pago: Optional[datetime] = None
+    tipo: str = "cuota"  # adelanto, cuota, pago_final, otro
+    medio_pago: str = "efectivo"
+    descripcion: Optional[str] = None
+
+
+class PagoProyectoUpdate(BaseModel):
+    monto: Optional[float] = None
+    fecha_pago: Optional[datetime] = None
+    tipo: Optional[str] = None
+    medio_pago: Optional[str] = None
+    descripcion: Optional[str] = None
+
+
+class PagoProyectoOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    proyecto_id: int
+    monto: float
+    fecha_pago: datetime
+    tipo: str
+    medio_pago: str
+    descripcion: Optional[str] = None
+
+
+class ResumenPagoProyecto(BaseModel):
+    proyecto_id: int
+    nombre: str
+    tipo_proyecto: Optional[str] = None
+    total_facturado: float
+    total_pagado: float
+    saldo_pendiente: float
+    ultimo_pago_monto: Optional[float] = None
+    ultimo_pago_fecha: Optional[datetime] = None
+
+
 class ProyectoDetalle(Proyecto):
     ordenes: list[OrdenServicioOut]
+    pagos: list[PagoProyectoOut]
     total_facturado: float
+    total_pagado: float
+    saldo_pendiente: float
 
 
 # ---------- Asistencia ----------
