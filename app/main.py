@@ -14,6 +14,7 @@ from app.routers import (
     negocios,
     proyectos,
     servicios,
+    tipos_proyecto,
     usuarios,
     ventas,
 )
@@ -45,6 +46,7 @@ app.include_router(caja.router)
 app.include_router(ventas.router)
 app.include_router(clientes.router)
 app.include_router(proyectos.router)
+app.include_router(tipos_proyecto.router)
 app.include_router(asistencia.router)
 app.include_router(impresiones.router)
 

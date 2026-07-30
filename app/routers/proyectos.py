@@ -8,7 +8,6 @@ from app.database import get_db
 router = APIRouter(prefix="/proyectos", tags=["Proyectos (Constructora)"], dependencies=[Depends(obtener_usuario_actual)])
 
 ESTADOS_VALIDOS = {"cotizacion", "en_proceso", "entregado", "cancelado"}
-TIPOS_PROYECTO_VALIDOS = {"elaboracion_planos", "ejecucion_obra", "otro"}
 
 
 def _a_detalle(proyecto: models.Proyecto) -> schemas.ProyectoDetalle:
@@ -25,14 +24,6 @@ def _a_detalle(proyecto: models.Proyecto) -> schemas.ProyectoDetalle:
         ordenes=proyecto.ordenes,
         total_facturado=total,
     )
-
-
-def _validar_tipo_proyecto(tipo: str | None):
-    if tipo is not None and tipo not in TIPOS_PROYECTO_VALIDOS:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Tipo de proyecto inválido. Usa uno de: {sorted(TIPOS_PROYECTO_VALIDOS)}",
-        )
 
 
 @router.get("/", response_model=list[schemas.Proyecto])
@@ -60,7 +51,6 @@ def crear_proyecto(data: schemas.ProyectoCreate, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Cliente no encontrado")
     if data.estado not in ESTADOS_VALIDOS:
         raise HTTPException(status_code=400, detail=f"Estado inválido. Usa uno de: {sorted(ESTADOS_VALIDOS)}")
-    _validar_tipo_proyecto(data.tipo_proyecto)
 
     proyecto = models.Proyecto(**data.model_dump())
     db.add(proyecto)
@@ -109,8 +99,6 @@ def actualizar_proyecto(
         raise HTTPException(status_code=404, detail="Proyecto no encontrado")
 
     datos = data.model_dump(exclude_unset=True)
-    if "tipo_proyecto" in datos:
-        _validar_tipo_proyecto(datos["tipo_proyecto"])
     if "cliente_id" in datos and not db.query(models.Cliente).get(datos["cliente_id"]):
         raise HTTPException(status_code=404, detail="Cliente no encontrado")
 

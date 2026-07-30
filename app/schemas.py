@@ -226,6 +226,23 @@ class Venta(BaseModel):
     items: list[VentaItemOut]
 
 
+# ---------- Tipos de proyecto (catálogo editable) ----------
+class TipoProyectoCreate(BaseModel):
+    negocio_id: int
+    nombre: str
+
+
+class TipoProyectoUpdate(BaseModel):
+    nombre: str
+
+
+class TipoProyecto(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    negocio_id: int
+    nombre: str
+
+
 # ---------- Clientes ----------
 class ClienteBase(BaseModel):
     nombre: str

@@ -190,6 +190,21 @@ class VentaItem(Base):
     servicio = relationship("Servicio")
 
 
+class TipoProyecto(Base):
+    """
+    Catálogo editable de tipos de proyecto/servicio de la Constructora
+    (elaboración de planos, ejecución de obra, supervisión, consultoría
+    estructural, etc.). A diferencia de una lista fija en el código, el
+    administrador puede agregar y editar estos tipos según lo que la
+    empresa realmente ofrezca.
+    """
+    __tablename__ = "tipos_proyecto"
+
+    id = Column(Integer, primary_key=True, index=True)
+    negocio_id = Column(Integer, ForeignKey("negocios.id"), nullable=False)
+    nombre = Column(String, nullable=False)
+
+
 class Cliente(Base):
     __tablename__ = "clientes"
 
