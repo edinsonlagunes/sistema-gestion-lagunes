@@ -105,6 +105,7 @@ class Ingreso(Base):
     medio_pago = Column(String, nullable=False, default="efectivo")
     descripcion = Column(String, nullable=True)
     fecha = Column(DateTime, default=datetime.utcnow)
+    orden_servicio_id = Column(Integer, ForeignKey("ordenes_servicio.id"), nullable=True)
 
     negocio = relationship("Negocio", back_populates="ingresos")
 
@@ -207,6 +208,7 @@ class Proyecto(Base):
     negocio_id = Column(Integer, ForeignKey("negocios.id"), nullable=False)
     cliente_id = Column(Integer, ForeignKey("clientes.id"), nullable=False)
     nombre = Column(String, nullable=False)
+    tipo_proyecto = Column(String, nullable=True)  # elaboracion_planos, ejecucion_obra, otro
     estado = Column(String, nullable=False, default="cotizacion")  # cotizacion, en_proceso, entregado, cancelado
     fecha_inicio = Column(DateTime, default=datetime.utcnow)
     fecha_entrega_estimada = Column(DateTime, nullable=True)

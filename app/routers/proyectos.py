@@ -2,12 +2,13 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app import models, schemas
-from app.auth import obtener_usuario_actual
+from app.auth import obtener_usuario_actual, requerir_admin
 from app.database import get_db
 
 router = APIRouter(prefix="/proyectos", tags=["Proyectos (Constructora)"], dependencies=[Depends(obtener_usuario_actual)])
 
 ESTADOS_VALIDOS = {"cotizacion", "en_proceso", "entregado", "cancelado"}
+TIPOS_PROYECTO_VALIDOS = {"elaboracion_planos", "ejecucion_obra", "otro"}
 
 
 def _a_detalle(proyecto: models.Proyecto) -> schemas.ProyectoDetalle:
@@ -17,12 +18,21 @@ def _a_detalle(proyecto: models.Proyecto) -> schemas.ProyectoDetalle:
         negocio_id=proyecto.negocio_id,
         cliente_id=proyecto.cliente_id,
         nombre=proyecto.nombre,
+        tipo_proyecto=proyecto.tipo_proyecto,
         estado=proyecto.estado,
         fecha_inicio=proyecto.fecha_inicio,
         fecha_entrega_estimada=proyecto.fecha_entrega_estimada,
         ordenes=proyecto.ordenes,
         total_facturado=total,
     )
+
+
+def _validar_tipo_proyecto(tipo: str | None):
+    if tipo is not None and tipo not in TIPOS_PROYECTO_VALIDOS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Tipo de proyecto inválido. Usa uno de: {sorted(TIPOS_PROYECTO_VALIDOS)}",
+        )
 
 
 @router.get("/", response_model=list[schemas.Proyecto])
@@ -50,6 +60,7 @@ def crear_proyecto(data: schemas.ProyectoCreate, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Cliente no encontrado")
     if data.estado not in ESTADOS_VALIDOS:
         raise HTTPException(status_code=400, detail=f"Estado inválido. Usa uno de: {sorted(ESTADOS_VALIDOS)}")
+    _validar_tipo_proyecto(data.tipo_proyecto)
 
     proyecto = models.Proyecto(**data.model_dump())
     db.add(proyecto)
@@ -75,6 +86,37 @@ def cambiar_estado(proyecto_id: int, data: schemas.ProyectoEstadoUpdate, db: Ses
         raise HTTPException(status_code=400, detail=f"Estado inválido. Usa uno de: {sorted(ESTADOS_VALIDOS)}")
 
     proyecto.estado = data.estado
+    db.commit()
+    db.refresh(proyecto)
+    return proyecto
+
+
+@router.patch("/{proyecto_id}", response_model=schemas.Proyecto)
+def actualizar_proyecto(
+    proyecto_id: int,
+    data: schemas.ProyectoUpdate,
+    db: Session = Depends(get_db),
+    _admin: models.Usuario = Depends(requerir_admin),
+):
+    """
+    Editar los datos generales del proyecto (nombre, tipo, cliente, fecha
+    estimada de entrega). Solo un administrador puede hacerlo — el estado
+    (cotización/en proceso/etc.) se sigue manejando aparte, con
+    PATCH /proyectos/{id}/estado.
+    """
+    proyecto = db.query(models.Proyecto).get(proyecto_id)
+    if not proyecto:
+        raise HTTPException(status_code=404, detail="Proyecto no encontrado")
+
+    datos = data.model_dump(exclude_unset=True)
+    if "tipo_proyecto" in datos:
+        _validar_tipo_proyecto(datos["tipo_proyecto"])
+    if "cliente_id" in datos and not db.query(models.Cliente).get(datos["cliente_id"]):
+        raise HTTPException(status_code=404, detail="Cliente no encontrado")
+
+    for campo, valor in datos.items():
+        setattr(proyecto, campo, valor)
+
     db.commit()
     db.refresh(proyecto)
     return proyecto
@@ -112,6 +154,7 @@ def registrar_orden_servicio(
         subtotal=subtotal,
     )
     db.add(orden)
+    db.flush()  # asigna orden.id, para poder vincular el ingreso
 
     if servicio.insumo_id and servicio.consumo_insumo_por_unidad:
         insumo = db.query(models.Insumo).get(servicio.insumo_id)
@@ -124,9 +167,90 @@ def registrar_orden_servicio(
             monto=subtotal,
             medio_pago="por cobrar",
             descripcion=f"Proyecto '{proyecto.nombre}' - {servicio.nombre}",
+            orden_servicio_id=orden.id,
         )
     )
 
     db.commit()
     db.refresh(proyecto)
+    return _a_detalle(proyecto)
+
+
+@router.patch("/{proyecto_id}/ordenes/{orden_id}", response_model=schemas.ProyectoDetalle)
+def actualizar_orden_servicio(
+    proyecto_id: int,
+    orden_id: int,
+    data: schemas.OrdenServicioUpdate,
+    db: Session = Depends(get_db),
+    _admin: models.Usuario = Depends(requerir_admin),
+):
+    """
+    Corrige la cantidad de un servicio ya registrado en el proyecto (por
+    ejemplo, si se anotaron mal los m² de un ploteo). Recalcula el
+    subtotal con el precio que se usó en su momento, ajusta el ingreso
+    correspondiente en finanzas, y corrige el stock del insumo vinculado
+    por la diferencia. Solo administradores.
+    """
+    orden = (
+        db.query(models.OrdenServicio)
+        .filter(models.OrdenServicio.id == orden_id, models.OrdenServicio.proyecto_id == proyecto_id)
+        .first()
+    )
+    if not orden:
+        raise HTTPException(status_code=404, detail="Orden de servicio no encontrada")
+
+    cantidad_anterior = orden.cantidad
+    diferencia = data.cantidad - cantidad_anterior
+
+    orden.cantidad = data.cantidad
+    orden.subtotal = orden.precio_unitario * data.cantidad
+
+    ingreso = (
+        db.query(models.Ingreso).filter(models.Ingreso.orden_servicio_id == orden.id).first()
+    )
+    if ingreso:
+        ingreso.monto = orden.subtotal
+
+    servicio = db.query(models.Servicio).get(orden.servicio_id)
+    if servicio and servicio.insumo_id and servicio.consumo_insumo_por_unidad and diferencia != 0:
+        insumo = db.query(models.Insumo).get(servicio.insumo_id)
+        if insumo:
+            insumo.stock_actual -= servicio.consumo_insumo_por_unidad * diferencia
+
+    db.commit()
+    proyecto = db.query(models.Proyecto).get(proyecto_id)
+    return _a_detalle(proyecto)
+
+
+@router.delete("/{proyecto_id}/ordenes/{orden_id}", response_model=schemas.ProyectoDetalle)
+def eliminar_orden_servicio(
+    proyecto_id: int,
+    orden_id: int,
+    db: Session = Depends(get_db),
+    _admin: models.Usuario = Depends(requerir_admin),
+):
+    """
+    Quita un servicio que se había registrado por error en el proyecto:
+    revierte el ingreso en finanzas y devuelve el insumo consumido al
+    stock. Solo administradores.
+    """
+    orden = (
+        db.query(models.OrdenServicio)
+        .filter(models.OrdenServicio.id == orden_id, models.OrdenServicio.proyecto_id == proyecto_id)
+        .first()
+    )
+    if not orden:
+        raise HTTPException(status_code=404, detail="Orden de servicio no encontrada")
+
+    servicio = db.query(models.Servicio).get(orden.servicio_id)
+    if servicio and servicio.insumo_id and servicio.consumo_insumo_por_unidad:
+        insumo = db.query(models.Insumo).get(servicio.insumo_id)
+        if insumo:
+            insumo.stock_actual += servicio.consumo_insumo_por_unidad * orden.cantidad
+
+    db.query(models.Ingreso).filter(models.Ingreso.orden_servicio_id == orden.id).delete()
+    db.delete(orden)
+    db.commit()
+
+    proyecto = db.query(models.Proyecto).get(proyecto_id)
     return _a_detalle(proyecto)

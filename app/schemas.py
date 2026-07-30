@@ -246,6 +246,7 @@ class ProyectoBase(BaseModel):
     negocio_id: int
     cliente_id: int
     nombre: str
+    tipo_proyecto: Optional[str] = None
     estado: str = "cotizacion"
     fecha_entrega_estimada: Optional[datetime] = None
 
@@ -258,9 +259,20 @@ class ProyectoEstadoUpdate(BaseModel):
     estado: str
 
 
+class ProyectoUpdate(BaseModel):
+    nombre: Optional[str] = None
+    tipo_proyecto: Optional[str] = None
+    cliente_id: Optional[int] = None
+    fecha_entrega_estimada: Optional[datetime] = None
+
+
 class OrdenServicioCreate(BaseModel):
     servicio_id: int
     colaborador_id: int
+    cantidad: float
+
+
+class OrdenServicioUpdate(BaseModel):
     cantidad: float
 
 
