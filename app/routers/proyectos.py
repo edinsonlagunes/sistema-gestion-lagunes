@@ -161,10 +161,11 @@ def registrar_orden_servicio(
 ):
     """
     Registra un servicio técnico entregado dentro del proyecto (un plano,
-    un expediente, un estudio de suelos, un ploteo...). Igual que en el
-    POS: calcula el subtotal con el precio vigente del catálogo, genera
-    el ingreso en finanzas, y descuenta el insumo vinculado si lo tiene
-    (por ejemplo, papel y tinta de plotter).
+    un expediente, un estudio de suelos, un ploteo...). Calcula el
+    subtotal con el precio vigente del catálogo (eso es lo FACTURADO) y
+    descuenta el insumo vinculado si lo tiene. NO genera ingreso — eso
+    solo pasa cuando se registra un pago real (ver /pagos), para no
+    contar como cobrado algo que todavía no llegó.
     """
     proyecto = db.query(models.Proyecto).get(proyecto_id)
     if not proyecto:
@@ -187,22 +188,11 @@ def registrar_orden_servicio(
         subtotal=subtotal,
     )
     db.add(orden)
-    db.flush()  # asigna orden.id, para poder vincular el ingreso
 
     if servicio.insumo_id and servicio.consumo_insumo_por_unidad:
         insumo = db.query(models.Insumo).get(servicio.insumo_id)
         if insumo:
             insumo.stock_actual -= servicio.consumo_insumo_por_unidad * data.cantidad
-
-    db.add(
-        models.Ingreso(
-            negocio_id=proyecto.negocio_id,
-            monto=subtotal,
-            medio_pago="por cobrar",
-            descripcion=f"Proyecto '{proyecto.nombre}' - {servicio.nombre}",
-            orden_servicio_id=orden.id,
-        )
-    )
 
     db.commit()
     db.refresh(proyecto)
@@ -220,9 +210,10 @@ def actualizar_orden_servicio(
     """
     Corrige la cantidad de un servicio ya registrado en el proyecto (por
     ejemplo, si se anotaron mal los m² de un ploteo). Recalcula el
-    subtotal con el precio que se usó en su momento, ajusta el ingreso
-    correspondiente en finanzas, y corrige el stock del insumo vinculado
-    por la diferencia. Solo administradores.
+    subtotal (lo facturado) con el precio que se usó en su momento, y
+    corrige el stock del insumo vinculado por la diferencia. No toca
+    ingresos — esos van aparte, ligados a los pagos reales. Solo
+    administradores.
     """
     orden = (
         db.query(models.OrdenServicio)
@@ -237,12 +228,6 @@ def actualizar_orden_servicio(
 
     orden.cantidad = data.cantidad
     orden.subtotal = orden.precio_unitario * data.cantidad
-
-    ingreso = (
-        db.query(models.Ingreso).filter(models.Ingreso.orden_servicio_id == orden.id).first()
-    )
-    if ingreso:
-        ingreso.monto = orden.subtotal
 
     servicio = db.query(models.Servicio).get(orden.servicio_id)
     if servicio and servicio.insumo_id and servicio.consumo_insumo_por_unidad and diferencia != 0:
@@ -264,8 +249,8 @@ def eliminar_orden_servicio(
 ):
     """
     Quita un servicio que se había registrado por error en el proyecto:
-    revierte el ingreso en finanzas y devuelve el insumo consumido al
-    stock. Solo administradores.
+    baja lo facturado y devuelve el insumo consumido al stock. No toca
+    ingresos. Solo administradores.
     """
     orden = (
         db.query(models.OrdenServicio)
@@ -281,7 +266,6 @@ def eliminar_orden_servicio(
         if insumo:
             insumo.stock_actual += servicio.consumo_insumo_por_unidad * orden.cantidad
 
-    db.query(models.Ingreso).filter(models.Ingreso.orden_servicio_id == orden.id).delete()
     db.delete(orden)
     db.commit()
 
@@ -298,8 +282,10 @@ def registrar_pago(
 ):
     """
     Registra un pago recibido contra el proyecto — el adelanto inicial,
-    una cuota, o el pago final. No modifica lo facturado (las órdenes);
-    solo el saldo pendiente, que se recalcula solo. Solo administradores.
+    una cuota, o el pago final. Esto SÍ genera el ingreso en finanzas
+    (por el monto realmente cobrado, con su fecha y medio de pago real)
+    — a diferencia de facturar una orden, que no mueve caja todavía.
+    Solo administradores.
     """
     proyecto = db.query(models.Proyecto).get(proyecto_id)
     if not proyecto:
@@ -314,6 +300,20 @@ def registrar_pago(
         descripcion=data.descripcion,
     )
     db.add(pago)
+    db.flush()  # asigna pago.id, para poder vincular el ingreso
+
+    etiquetas_tipo = {"adelanto": "Adelanto", "cuota": "Cuota", "pago_final": "Pago final", "otro": "Pago"}
+    db.add(
+        models.Ingreso(
+            negocio_id=proyecto.negocio_id,
+            monto=pago.monto,
+            medio_pago=pago.medio_pago,
+            descripcion=f"{etiquetas_tipo.get(pago.tipo, 'Pago')} - Proyecto '{proyecto.nombre}'",
+            fecha=pago.fecha_pago,
+            pago_proyecto_id=pago.id,
+        )
+    )
+
     db.commit()
     db.refresh(proyecto)
     return _a_detalle(proyecto)
@@ -327,7 +327,7 @@ def actualizar_pago(
     db: Session = Depends(get_db),
     _admin: models.Usuario = Depends(requerir_admin),
 ):
-    """Corrige un pago ya registrado (monto, fecha, tipo). Solo administradores."""
+    """Corrige un pago ya registrado (monto, fecha, tipo) y su ingreso vinculado. Solo administradores."""
     pago = (
         db.query(models.PagoProyecto)
         .filter(models.PagoProyecto.id == pago_id, models.PagoProyecto.proyecto_id == proyecto_id)
@@ -338,6 +338,12 @@ def actualizar_pago(
 
     for campo, valor in data.model_dump(exclude_unset=True).items():
         setattr(pago, campo, valor)
+
+    ingreso = db.query(models.Ingreso).filter(models.Ingreso.pago_proyecto_id == pago.id).first()
+    if ingreso:
+        ingreso.monto = pago.monto
+        ingreso.fecha = pago.fecha_pago
+        ingreso.medio_pago = pago.medio_pago
 
     db.commit()
     proyecto = db.query(models.Proyecto).get(proyecto_id)
@@ -351,7 +357,7 @@ def eliminar_pago(
     db: Session = Depends(get_db),
     _admin: models.Usuario = Depends(requerir_admin),
 ):
-    """Quita un pago registrado por error. Solo administradores."""
+    """Quita un pago registrado por error, junto con el ingreso que había generado. Solo administradores."""
     pago = (
         db.query(models.PagoProyecto)
         .filter(models.PagoProyecto.id == pago_id, models.PagoProyecto.proyecto_id == proyecto_id)
@@ -360,6 +366,7 @@ def eliminar_pago(
     if not pago:
         raise HTTPException(status_code=404, detail="Pago no encontrado")
 
+    db.query(models.Ingreso).filter(models.Ingreso.pago_proyecto_id == pago.id).delete()
     db.delete(pago)
     db.commit()
     proyecto = db.query(models.Proyecto).get(proyecto_id)

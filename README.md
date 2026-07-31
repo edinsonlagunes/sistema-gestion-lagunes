@@ -73,7 +73,7 @@ nueva.
 | `POST /proyectos/{id}/ordenes` | Registra un servicio técnico entregado (plano, expediente, estudio de suelos, ploteo). Calcula el subtotal, genera el ingreso y descuenta el insumo vinculado — igual mecanismo que el POS |
 | `PATCH /proyectos/{id}/ordenes/{orden_id}` | Corrige la cantidad de una orden ya registrada, ajustando el ingreso y el insumo por la diferencia — **solo administradores** |
 | `DELETE /proyectos/{id}/ordenes/{orden_id}` | Quita una orden registrada por error: revierte el ingreso y devuelve el insumo al stock — **solo administradores** |
-| `POST /proyectos/{id}/pagos` | Registra un pago recibido (adelanto, cuota o pago final), con monto, fecha del depósito y medio de pago — **solo administradores** |
+| `POST /proyectos/{id}/pagos` | Registra un pago recibido (adelanto, cuota o pago final), con monto, fecha del depósito y medio de pago — genera el ingreso real en finanzas — **solo administradores** |
 | `PATCH/DELETE /proyectos/{id}/pagos/{pago_id}` | Corrige o quita un pago ya registrado — **solo administradores** |
 | `GET /proyectos/resumen-pagos?negocio_id=` | Para el Dashboard: proyectos con saldo pendiente (facturado − pagado), con el monto y fecha del último pago. No incluye proyectos ya cancelados |
 
@@ -82,12 +82,12 @@ con crear los servicios técnicos con `negocio_id` de la Constructora) — así
 planos, expedientes, estudios de suelos y ploteos se manejan con el mismo
 mecanismo de precios e insumos que ya está probado.
 
-**Nota sobre el dinero**: a diferencia del POS (donde el cliente paga en el
-momento), en la Constructora el ingreso se registra con `medio_pago: "por
-cobrar"` apenas se entrega el servicio — es una simplificación útil para
-llevar la cuenta, pero técnicamente no distingue todavía entre "facturado"
-y "cobrado". Si te interesa que el sistema separe cuentas por cobrar de
-ingresos ya cobrados, es un ajuste puntual para cuando lo necesites.
+**Sobre el dinero — facturado vs. cobrado (corregido)**: a diferencia del
+POS (donde el cliente paga en el momento), en la Constructora facturar un
+servicio (una orden) **ya no genera ingreso**. El ingreso solo se genera
+al registrar un **pago real** (ver sección de Pagos más abajo), por el
+monto efectivamente cobrado — así el Dashboard nunca muestra como
+"ingreso" algo que todavía está pendiente de cobro.
 
 ### Fase 4 — Asistencia de colaboradores (agregada)
 

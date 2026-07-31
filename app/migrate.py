@@ -1,27 +1,29 @@
 """
 Migración manual: agrega columnas nuevas a tablas que ya existían antes
-de este cambio.
+de este cambio, y corrige datos que quedaron mal calculados por un
+cambio de diseño (ver fix_ingresos_proyecto más abajo).
 
 Base.metadata.create_all() (usado en app/main.py y app/seed.py) solo crea
 tablas que todavía no existen — no modifica las que ya están creadas con
-datos adentro. Cuando se le agrega una columna nueva a un modelo (como
-tipo_proyecto a Proyecto, u orden_servicio_id a Ingreso), hay que
+datos adentro. Cuando se le agrega una columna nueva a un modelo, hay que
 agregarla a mano una sola vez con este script.
 
 Ejecutar una sola vez, tanto en Railway (Console) como en tu base local
 si ya tenías datos: python -m app.migrate
-Es seguro correrlo varias veces — si la columna ya existe, no hace nada.
+Es seguro correrlo varias veces — si ya no hay nada que corregir, no
+hace nada.
 """
 from sqlalchemy import inspect, text
 
-from app.database import engine
+from app import models
+from app.database import SessionLocal, engine
 
 
 def _tiene_columna(inspector, tabla, columna):
     return any(c["name"] == columna for c in inspector.get_columns(tabla))
 
 
-def migrar():
+def migrar_columnas():
     inspector = inspect(engine)
 
     with engine.connect() as conn:
@@ -46,6 +48,72 @@ def migrar():
         else:
             print("registros_impresion.equipo_id ya existe — nada que hacer.")
 
+        if not _tiene_columna(inspector, "ingresos", "pago_proyecto_id"):
+            print("Agregando columna pago_proyecto_id a ingresos...")
+            conn.execute(text("ALTER TABLE ingresos ADD COLUMN pago_proyecto_id INTEGER"))
+            conn.commit()
+        else:
+            print("ingresos.pago_proyecto_id ya existe — nada que hacer.")
+
+
+def fix_ingresos_proyecto():
+    """
+    Corrige el error de diseño donde facturar una orden generaba un
+    ingreso por el total, como si ya se hubiera cobrado. Dos pasos:
+      1. Borra los ingresos viejos que se crearon así (ligados a una
+         orden_servicio_id) — sobrestimaban lo cobrado.
+      2. Crea el ingreso real para cada pago que ya se había registrado
+         y que, por el error, nunca generó su ingreso correspondiente.
+    Idempotente: en la segunda corrida no queda nada por corregir.
+    """
+    db = SessionLocal()
+    try:
+        borrados = (
+            db.query(models.Ingreso)
+            .filter(models.Ingreso.orden_servicio_id.isnot(None))
+            .delete(synchronize_session=False)
+        )
+        if borrados:
+            print(f"Se quitaron {borrados} ingreso(s) generados incorrectamente al facturar órdenes.")
+        else:
+            print("No había ingresos viejos de órdenes que corregir.")
+
+        etiquetas_tipo = {"adelanto": "Adelanto", "cuota": "Cuota", "pago_final": "Pago final", "otro": "Pago"}
+        creados = 0
+        for pago in db.query(models.PagoProyecto).all():
+            ya_existe = (
+                db.query(models.Ingreso).filter(models.Ingreso.pago_proyecto_id == pago.id).first()
+            )
+            if ya_existe:
+                continue
+            proyecto = db.query(models.Proyecto).get(pago.proyecto_id)
+            if not proyecto:
+                continue
+            db.add(
+                models.Ingreso(
+                    negocio_id=proyecto.negocio_id,
+                    monto=pago.monto,
+                    medio_pago=pago.medio_pago,
+                    descripcion=f"{etiquetas_tipo.get(pago.tipo, 'Pago')} - Proyecto '{proyecto.nombre}'",
+                    fecha=pago.fecha_pago,
+                    pago_proyecto_id=pago.id,
+                )
+            )
+            creados += 1
+
+        if creados:
+            print(f"Se crearon {creados} ingreso(s) para pagos que no lo tenían.")
+        else:
+            print("No había pagos sin su ingreso correspondiente.")
+
+        db.commit()
+    finally:
+        db.close()
+
+
+def migrar():
+    migrar_columnas()
+    fix_ingresos_proyecto()
     print("Migración completa.")
 
 

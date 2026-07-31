@@ -105,7 +105,8 @@ class Ingreso(Base):
     medio_pago = Column(String, nullable=False, default="efectivo")
     descripcion = Column(String, nullable=True)
     fecha = Column(DateTime, default=datetime.utcnow)
-    orden_servicio_id = Column(Integer, ForeignKey("ordenes_servicio.id"), nullable=True)
+    orden_servicio_id = Column(Integer, ForeignKey("ordenes_servicio.id"), nullable=True)  # ya no se usa para crear ingresos nuevos, se deja por compatibilidad
+    pago_proyecto_id = Column(Integer, ForeignKey("pagos_proyecto.id"), nullable=True)
 
     negocio = relationship("Negocio", back_populates="ingresos")
 
