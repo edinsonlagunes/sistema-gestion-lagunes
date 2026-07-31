@@ -39,6 +39,13 @@ def migrar():
         else:
             print("ingresos.orden_servicio_id ya existe — nada que hacer.")
 
+        if not _tiene_columna(inspector, "registros_impresion", "equipo_id"):
+            print("Agregando columna equipo_id a registros_impresion...")
+            conn.execute(text("ALTER TABLE registros_impresion ADD COLUMN equipo_id INTEGER"))
+            conn.commit()
+        else:
+            print("registros_impresion.equipo_id ya existe — nada que hacer.")
+
     print("Migración completa.")
 
 

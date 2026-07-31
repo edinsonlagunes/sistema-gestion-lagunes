@@ -357,6 +357,40 @@ class ProyectoDetalle(Proyecto):
     saldo_pendiente: float
 
 
+# ---------- Puestos de trabajo y equipos ----------
+class EquipoCreate(BaseModel):
+    tipo: str  # computadora, fotocopiadora, impresora, plotter
+    nombre: str
+
+
+class EquipoOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    puesto_id: int
+    tipo: str
+    nombre: str
+
+
+class PuestoTrabajoCreate(BaseModel):
+    negocio_id: int
+    nombre: str
+    colaborador_id: Optional[int] = None
+
+
+class PuestoTrabajoUpdate(BaseModel):
+    nombre: Optional[str] = None
+    colaborador_id: Optional[int] = None
+
+
+class PuestoTrabajoOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    negocio_id: int
+    nombre: str
+    colaborador_id: Optional[int] = None
+    equipos: list[EquipoOut]
+
+
 # ---------- Asistencia ----------
 class AsistenciaMarcarRequest(BaseModel):
     colaborador_id: int
@@ -420,3 +454,48 @@ class ResumenNegocio(BaseModel):
     total_egresos: float
     balance: float
     insumos_bajo_stock: int
+
+
+# ---------- Movimientos del día, conciliación y reportes (solo admin) ----------
+class MovimientoFinanciero(BaseModel):
+    tipo: str  # ingreso | egreso
+    id: int
+    negocio_id: int
+    monto: float
+    medio_pago: Optional[str] = None  # solo en ingresos
+    categoria: Optional[str] = None  # solo en egresos
+    descripcion: Optional[str] = None
+    fecha: datetime
+
+
+class MovimientosDiaResumen(BaseModel):
+    fecha: date
+    total_ingresos: float
+    total_egresos: float
+    balance: float
+    movimientos: list[MovimientoFinanciero]
+
+
+class ConciliacionColaborador(BaseModel):
+    colaborador_id: int
+    colaborador_nombre: str
+    puesto_nombre: Optional[str] = None
+    total_ventas: float
+    cantidad_ventas: int
+    total_impresiones: float
+
+
+class ConciliacionDiaria(BaseModel):
+    fecha: date
+    por_colaborador: list[ConciliacionColaborador]
+    cajas_del_dia: list[CajaSesion]
+
+
+class ReporteBalance(BaseModel):
+    periodo: str  # diario, semanal, mensual
+    fecha_desde: date
+    fecha_hasta: date
+    total_ingresos: float
+    total_egresos: float
+    balance: float
+    cantidad_movimientos: int

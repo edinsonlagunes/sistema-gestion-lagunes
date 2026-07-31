@@ -132,6 +132,22 @@ paso, cuando llegues ahí, es adaptar ese export al formato de columnas de
 arriba (o pedirme que ajuste el importador al formato exacto que traiga)
 para automatizar la carga.
 
+### Puestos de trabajo, equipos, y dashboard financiero completo (agregado)
+
+| Endpoint | Qué hace |
+|---|---|
+| `GET/POST /puestos-trabajo/` | Stands/puestos de trabajo (mostrador, mesa de dibujo…), cada uno con un colaborador a cargo. Crear/editar/quitar — **solo administradores** |
+| `POST/DELETE /puestos-trabajo/{id}/equipos` | Agregar o quitar computadoras/fotocopiadoras/impresoras/plotters de un puesto — **solo administradores** |
+| `GET /finanzas/movimientos-dia?fecha=&negocio_id=` | Todo el movimiento de caja de un día — cada ingreso y egreso, uno por uno, con el balance — **solo administradores** |
+| `GET /finanzas/conciliacion-diaria?fecha=&negocio_id=` | El día agrupado por colaborador (y su puesto/equipos): cuánto vendió, cuántas ventas, cuántas impresiones. Pensado para que el encargado de caja haga el cuadre — accesible a cualquier usuario logueado |
+| `GET /finanzas/reporte?periodo=diario\|semanal\|mensual&fecha=&negocio_id=` | Balance del periodo completo (el día, la semana lunes-domingo, o el mes) — **solo administradores** |
+
+**Nota**: el envío automático de estos reportes por correo (diario/semanal/mensual)
+no está construido todavía — requiere conectar un servicio de email
+(Resend, SendGrid, Gmail SMTP, etc.), que es una decisión y una cuenta
+aparte. Por ahora los reportes se ven en el Dashboard; cuando quieras dar
+ese paso, lo vemos.
+
 ## 3. Cuando el modelo de datos cambia (migraciones)
 
 `Base.metadata.create_all()` (usado al arrancar el servidor y en el seed)

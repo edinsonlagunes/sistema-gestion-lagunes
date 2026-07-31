@@ -278,6 +278,37 @@ class PagoProyecto(Base):
     proyecto = relationship("Proyecto", back_populates="pagos")
 
 
+class PuestoTrabajo(Base):
+    """
+    Un stand/puesto de trabajo (mostrador de la librería, mesa de dibujo,
+    etc.), con un colaborador a cargo y sus equipos (computadoras,
+    fotocopiadoras, impresoras). Sirve de base para la conciliación
+    diaria: comparar lo vendido/impreso de cada puesto contra su encargado.
+    """
+    __tablename__ = "puestos_trabajo"
+
+    id = Column(Integer, primary_key=True, index=True)
+    negocio_id = Column(Integer, ForeignKey("negocios.id"), nullable=False)
+    nombre = Column(String, nullable=False)  # "Stand 1", "Mostrador principal", etc.
+    colaborador_id = Column(Integer, ForeignKey("colaboradores.id"), nullable=True)
+
+    negocio = relationship("Negocio")
+    colaborador = relationship("Colaborador")
+    equipos = relationship("Equipo", back_populates="puesto", cascade="all, delete-orphan")
+
+
+class Equipo(Base):
+    """Una computadora, fotocopiadora, impresora o plotter asignada a un puesto de trabajo."""
+    __tablename__ = "equipos"
+
+    id = Column(Integer, primary_key=True, index=True)
+    puesto_id = Column(Integer, ForeignKey("puestos_trabajo.id"), nullable=False)
+    tipo = Column(String, nullable=False)  # computadora, fotocopiadora, impresora, plotter
+    nombre = Column(String, nullable=False)  # "PC-01", "Canon IR2006", etc.
+
+    puesto = relationship("PuestoTrabajo", back_populates="equipos")
+
+
 class Asistencia(Base):
     """Registro de entrada/salida de un colaborador (Fase 4)."""
     __tablename__ = "asistencias"
@@ -307,7 +338,8 @@ class RegistroImpresion(Base):
     negocio_id = Column(Integer, ForeignKey("negocios.id"), nullable=False)
     colaborador_id = Column(Integer, ForeignKey("colaboradores.id"), nullable=True)
     colaborador_nombre_original = Column(String, nullable=True)  # tal cual venía en el CSV
-    equipo = Column(String, nullable=False)  # nombre/IP de la impresora o plotter
+    equipo = Column(String, nullable=False)  # nombre/IP de la impresora o plotter (texto libre, como venía del CSV)
+    equipo_id = Column(Integer, ForeignKey("equipos.id"), nullable=True)  # vínculo opcional al catálogo formal
     tipo_trabajo = Column(String, nullable=False)  # impresion_bn, impresion_color, escaneo, ploteo
     tamano = Column(String, nullable=True)  # A4, A3, A2, A1, A0
     cantidad = Column(Float, nullable=False)  # páginas o m2, según el tipo

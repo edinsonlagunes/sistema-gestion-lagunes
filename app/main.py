@@ -13,6 +13,7 @@ from app.routers import (
     insumos,
     negocios,
     proyectos,
+    puestos_trabajo,
     servicios,
     tipos_proyecto,
     usuarios,
@@ -47,6 +48,7 @@ app.include_router(ventas.router)
 app.include_router(clientes.router)
 app.include_router(proyectos.router)
 app.include_router(tipos_proyecto.router)
+app.include_router(puestos_trabajo.router)
 app.include_router(asistencia.router)
 app.include_router(impresiones.router)
 
