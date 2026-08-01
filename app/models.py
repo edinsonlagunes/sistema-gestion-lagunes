@@ -16,6 +16,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import relationship
 
 from app.database import Base
+from app.zona_horaria import ahora_peru
 
 
 class Negocio(Base):
@@ -39,7 +40,7 @@ class Colaborador(Base):
     negocio_id = Column(Integer, ForeignKey("negocios.id"), nullable=False)
     rol = Column(String, nullable=False)  # admin, dibujante, cajero, ventas, etc.
     activo = Column(Boolean, default=True)
-    creado_en = Column(DateTime, default=datetime.utcnow)
+    creado_en = Column(DateTime, default=ahora_peru)
 
     negocio = relationship("Negocio", back_populates="colaboradores")
     usuario = relationship("Usuario", back_populates="colaborador", uselist=False)
@@ -90,7 +91,7 @@ class Compra(Base):
     insumo_id = Column(Integer, ForeignKey("insumos.id"), nullable=False)
     cantidad = Column(Float, nullable=False)
     costo = Column(Float, nullable=False)
-    fecha = Column(DateTime, default=datetime.utcnow)
+    fecha = Column(DateTime, default=ahora_peru)
 
     proveedor = relationship("Proveedor", back_populates="compras")
     insumo = relationship("Insumo", back_populates="compras")
@@ -104,7 +105,7 @@ class Ingreso(Base):
     monto = Column(Float, nullable=False)
     medio_pago = Column(String, nullable=False, default="efectivo")
     descripcion = Column(String, nullable=True)
-    fecha = Column(DateTime, default=datetime.utcnow)
+    fecha = Column(DateTime, default=ahora_peru)
     orden_servicio_id = Column(Integer, ForeignKey("ordenes_servicio.id"), nullable=True)  # ya no se usa para crear ingresos nuevos, se deja por compatibilidad
     pago_proyecto_id = Column(Integer, ForeignKey("pagos_proyecto.id"), nullable=True)
 
@@ -119,7 +120,7 @@ class Egreso(Base):
     categoria = Column(String, nullable=False)  # compra_insumo, planilla, servicios, etc.
     monto = Column(Float, nullable=False)
     descripcion = Column(String, nullable=True)
-    fecha = Column(DateTime, default=datetime.utcnow)
+    fecha = Column(DateTime, default=ahora_peru)
 
     negocio = relationship("Negocio", back_populates="egresos")
 
@@ -151,7 +152,7 @@ class CajaSesion(Base):
     id = Column(Integer, primary_key=True, index=True)
     negocio_id = Column(Integer, ForeignKey("negocios.id"), nullable=False)
     colaborador_id = Column(Integer, ForeignKey("colaboradores.id"), nullable=False)
-    fecha_apertura = Column(DateTime, default=datetime.utcnow)
+    fecha_apertura = Column(DateTime, default=ahora_peru)
     monto_apertura = Column(Float, nullable=False, default=0)
     fecha_cierre = Column(DateTime, nullable=True)
     monto_cierre_esperado = Column(Float, nullable=True)
@@ -171,7 +172,7 @@ class Venta(Base):
     cliente = Column(String, nullable=True)
     medio_pago = Column(String, nullable=False, default="efectivo")
     total = Column(Float, nullable=False, default=0)
-    fecha = Column(DateTime, default=datetime.utcnow)
+    fecha = Column(DateTime, default=ahora_peru)
 
     caja_sesion = relationship("CajaSesion", back_populates="ventas")
     items = relationship("VentaItem", back_populates="venta", cascade="all, delete-orphan")
@@ -226,7 +227,7 @@ class Proyecto(Base):
     nombre = Column(String, nullable=False)
     tipo_proyecto = Column(String, nullable=True)  # texto libre, respaldado por el catálogo TipoProyecto
     estado = Column(String, nullable=False, default="cotizacion")  # cotizacion, en_proceso, entregado, cancelado
-    fecha_inicio = Column(DateTime, default=datetime.utcnow)
+    fecha_inicio = Column(DateTime, default=ahora_peru)
     fecha_entrega_estimada = Column(DateTime, nullable=True)
 
     cliente = relationship("Cliente", back_populates="proyectos")
@@ -252,7 +253,7 @@ class OrdenServicio(Base):
     precio_unitario = Column(Float, nullable=False)
     subtotal = Column(Float, nullable=False)
     estado = Column(String, nullable=False, default="entregado")  # pendiente, entregado
-    fecha = Column(DateTime, default=datetime.utcnow)
+    fecha = Column(DateTime, default=ahora_peru)
 
     proyecto = relationship("Proyecto", back_populates="ordenes")
     servicio = relationship("Servicio")
@@ -271,7 +272,7 @@ class PagoProyecto(Base):
     id = Column(Integer, primary_key=True, index=True)
     proyecto_id = Column(Integer, ForeignKey("proyectos.id"), nullable=False)
     monto = Column(Float, nullable=False)
-    fecha_pago = Column(DateTime, nullable=False, default=datetime.utcnow)
+    fecha_pago = Column(DateTime, nullable=False, default=ahora_peru)
     tipo = Column(String, nullable=False, default="cuota")  # adelanto, cuota, pago_final, otro
     medio_pago = Column(String, nullable=False, default="efectivo")
     descripcion = Column(String, nullable=True)
@@ -316,8 +317,8 @@ class Asistencia(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     colaborador_id = Column(Integer, ForeignKey("colaboradores.id"), nullable=False)
-    fecha = Column(Date, default=lambda: datetime.utcnow().date())
-    hora_entrada = Column(DateTime, default=datetime.utcnow)
+    fecha = Column(Date, default=lambda: ahora_peru().date())
+    hora_entrada = Column(DateTime, default=ahora_peru)
     hora_salida = Column(DateTime, nullable=True)
 
     colaborador = relationship("Colaborador")
@@ -344,7 +345,7 @@ class RegistroImpresion(Base):
     tipo_trabajo = Column(String, nullable=False)  # impresion_bn, impresion_color, escaneo, ploteo
     tamano = Column(String, nullable=True)  # A4, A3, A2, A1, A0
     cantidad = Column(Float, nullable=False)  # páginas o m2, según el tipo
-    fecha = Column(DateTime, default=datetime.utcnow)
+    fecha = Column(DateTime, default=ahora_peru)
     origen = Column(String, nullable=False, default="manual")  # manual, csv_import
 
     negocio = relationship("Negocio")

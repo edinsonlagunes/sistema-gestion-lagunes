@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from app import models, schemas
 from app.auth import obtener_usuario_actual
 from app.database import get_db
+from app.zona_horaria import ahora_peru
 
 router = APIRouter(prefix="/caja", tags=["Caja"], dependencies=[Depends(obtener_usuario_actual)])
 
@@ -56,7 +57,7 @@ def cerrar_caja(sesion_id: int, data: schemas.CajaCerrarRequest, db: Session = D
     total_efectivo = sum(v.total for v in sesion.ventas if v.medio_pago == "efectivo")
     sesion.monto_cierre_esperado = sesion.monto_apertura + total_efectivo
     sesion.monto_cierre_reportado = data.monto_cierre_reportado
-    sesion.fecha_cierre = datetime.utcnow()
+    sesion.fecha_cierre = ahora_peru()
     sesion.estado = "cerrada"
 
     db.commit()

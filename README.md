@@ -148,7 +148,23 @@ no está construido todavía — requiere conectar un servicio de email
 aparte. Por ahora los reportes se ven en el Dashboard; cuando quieras dar
 ese paso, lo vemos.
 
-## 3. Cuando el modelo de datos cambia (migraciones)
+## 3. Zona horaria (corregido)
+
+Todas las horas y fechas que el sistema genera (asistencia, ventas,
+pagos, caja, impresiones...) ahora usan la hora real de Perú
+(`app/zona_horaria.py`), no UTC. Antes de esta corrección, todo se
+guardaba en UTC pero se mostraba sin convertir — por eso una entrada
+marcada a las 9pm aparecía como "2:52 a.m.".
+
+**Dato importante**: esto corrige todo lo que se registre **desde ahora**.
+Los registros que ya existían antes de este cambio (por ejemplo, una
+marca de asistencia de prueba, o la fecha de un pago ya guardado) pueden
+seguir mostrando una hora hasta 5 horas adelantada — no se corrigieron
+retroactivamente, porque en este punto solo son datos de prueba tuyos.
+Si te encuentras con una fecha vieja que se ve rara, ya sabes por qué —
+avísame si quieres que la corrijamos puntualmente.
+
+## 4. Cuando el modelo de datos cambia (migraciones)
 
 `Base.metadata.create_all()` (usado al arrancar el servidor y en el seed)
 **crea tablas nuevas, pero no modifica las que ya existen con datos
@@ -165,7 +181,7 @@ corriste `python -m app.seed`). Es seguro correrlo varias veces — si la
 columna ya existe, no hace nada. `app/migrate.py` lista exactamente qué
 columnas agrega.
 
-## 4. Autenticación (agregada)
+## 5. Autenticación (agregada)
 
 Todos los endpoints, salvo `POST /usuarios/login`, ahora exigen iniciar sesión.
 
@@ -179,7 +195,7 @@ python -c "import secrets; print(secrets.token_hex(32))"
 ```
 y agrégala como variable de entorno `SECRET_KEY` en Railway (Variables → New Variable) y en tu `.env` local. Si la cambias, todas las sesiones activas se cierran (no pasa nada grave, solo hay que volver a hacer login).
 
-## 5. Desplegar en Railway
+## 6. Desplegar en Railway
 
 ### Paso A — Subir el código a GitHub
 
@@ -255,7 +271,7 @@ Está bien para probarlo tú mismo, pero antes de darle acceso a tus
 colaboradores conviene agregar autenticación por token — es un ajuste
 puntual, dime cuando quieras que lo hagamos.
 
-## 6. Siguiente paso sugerido
+## 7. Siguiente paso sugerido
 
 Con esto, las 5 fases del roadmap original ya están construidas y
 probadas. Lo que queda pendiente no es backend, sino:

@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app import models, schemas
 from app.auth import obtener_usuario_actual
 from app.database import get_db
+from app.zona_horaria import ahora_peru
 
 router = APIRouter(
     prefix="/impresiones", tags=["Impresiones (Fase 5)"], dependencies=[Depends(obtener_usuario_actual)]
@@ -59,7 +60,7 @@ def registrar_impresion(data: schemas.RegistroImpresionCreate, db: Session = Dep
         tipo_trabajo=data.tipo_trabajo,
         tamano=data.tamano,
         cantidad=data.cantidad,
-        fecha=data.fecha or datetime.utcnow(),
+        fecha=data.fecha or ahora_peru(),
         origen="manual",
     )
     db.add(registro)

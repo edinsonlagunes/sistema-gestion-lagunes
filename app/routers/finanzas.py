@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from app import models, schemas
 from app.auth import obtener_usuario_actual, requerir_admin
 from app.database import get_db
+from app.zona_horaria import ahora_peru
 
 router = APIRouter(prefix="/finanzas", tags=["Finanzas"], dependencies=[Depends(obtener_usuario_actual)])
 
@@ -89,7 +90,7 @@ def movimientos_dia(
     cualquier usuario logueado), esta vista con el detalle completo es
     exclusiva de administradores.
     """
-    dia = fecha or date.today()
+    dia = fecha or ahora_peru().date()
     inicio, fin = _rango_del_dia(dia)
 
     query_ingresos = db.query(models.Ingreso).filter(models.Ingreso.fecha >= inicio, models.Ingreso.fecha <= fin)
@@ -150,7 +151,7 @@ def conciliacion_diaria(
     impresiones se registraron a su nombre — para que el encargado de
     caja haga el cuadre con cada persona, stand por stand.
     """
-    dia = fecha or date.today()
+    dia = fecha or ahora_peru().date()
     inicio, fin = _rango_del_dia(dia)
 
     query_ventas = db.query(models.Venta).filter(models.Venta.fecha >= inicio, models.Venta.fecha <= fin)
@@ -227,7 +228,7 @@ def reporte_balance(
     semana (lunes a domingo) o el mes que contiene la fecha dada (o la
     de hoy, si no se especifica). Solo administradores.
     """
-    referencia = fecha or date.today()
+    referencia = fecha or ahora_peru().date()
 
     if periodo == "diario":
         desde = hasta = referencia

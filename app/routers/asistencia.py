@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from app import models, schemas
 from app.auth import obtener_usuario_actual
 from app.database import get_db
+from app.zona_horaria import ahora_peru
 
 router = APIRouter(prefix="/asistencia", tags=["Asistencia"], dependencies=[Depends(obtener_usuario_actual)])
 
@@ -68,7 +69,7 @@ def marcar_salida(data: schemas.AsistenciaMarcarRequest, db: Session = Depends(g
             detail="No hay una entrada abierta para este colaborador",
         )
 
-    registro.hora_salida = datetime.utcnow()
+    registro.hora_salida = ahora_peru()
     db.commit()
     db.refresh(registro)
     return _a_schema(registro)

@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from app import models, schemas
 from app.auth import obtener_usuario_actual, requerir_admin
 from app.database import get_db
+from app.zona_horaria import ahora_peru
 
 router = APIRouter(prefix="/proyectos", tags=["Proyectos (Constructora)"], dependencies=[Depends(obtener_usuario_actual)])
 
@@ -294,7 +295,7 @@ def registrar_pago(
     pago = models.PagoProyecto(
         proyecto_id=proyecto.id,
         monto=data.monto,
-        fecha_pago=data.fecha_pago or datetime.utcnow(),
+        fecha_pago=data.fecha_pago or ahora_peru(),
         tipo=data.tipo,
         medio_pago=data.medio_pago,
         descripcion=data.descripcion,
