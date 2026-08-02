@@ -62,6 +62,27 @@ def migrar_columnas():
         else:
             print("egresos.pago_proveedor_id ya existe — nada que hacer.")
 
+        if not _tiene_columna(inspector, "proyectos", "presupuesto"):
+            print("Agregando columna presupuesto a proyectos...")
+            conn.execute(text("ALTER TABLE proyectos ADD COLUMN presupuesto FLOAT"))
+            conn.commit()
+        else:
+            print("proyectos.presupuesto ya existe — nada que hacer.")
+
+        if not _tiene_columna(inspector, "colaboradores", "sueldo_semanal"):
+            print("Agregando columna sueldo_semanal a colaboradores...")
+            conn.execute(text("ALTER TABLE colaboradores ADD COLUMN sueldo_semanal FLOAT"))
+            conn.commit()
+        else:
+            print("colaboradores.sueldo_semanal ya existe — nada que hacer.")
+
+        if not _tiene_columna(inspector, "colaboradores", "hora_entrada_esperada"):
+            print("Agregando columna hora_entrada_esperada a colaboradores...")
+            conn.execute(text("ALTER TABLE colaboradores ADD COLUMN hora_entrada_esperada VARCHAR"))
+            conn.commit()
+        else:
+            print("colaboradores.hora_entrada_esperada ya existe — nada que hacer.")
+
 
 def fix_ingresos_proyecto():
     """

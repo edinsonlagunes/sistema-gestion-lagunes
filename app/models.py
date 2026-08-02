@@ -19,6 +19,68 @@ from app.database import Base
 from app.zona_horaria import ahora_peru
 
 
+class Planilla(Base):
+    """Planilla semanal: agrupa el pago de todos los colaboradores de un negocio en una semana."""
+    __tablename__ = "planillas"
+
+    id = Column(Integer, primary_key=True, index=True)
+    negocio_id = Column(Integer, ForeignKey("negocios.id"), nullable=False)
+    fecha_inicio = Column(Date, nullable=False)
+    fecha_fin = Column(Date, nullable=False)
+    estado = Column(String, nullable=False, default="borrador")  # borrador, pagada
+    fecha_pago = Column(DateTime, nullable=True)
+
+    negocio = relationship("Negocio")
+    detalles = relationship("DetallePlanilla", back_populates="planilla", cascade="all, delete-orphan")
+
+
+class DetallePlanilla(Base):
+    """Lo que le corresponde a un colaborador dentro de una planilla: sueldo, faltas, tardanzas."""
+    __tablename__ = "detalles_planilla"
+
+    id = Column(Integer, primary_key=True, index=True)
+    planilla_id = Column(Integer, ForeignKey("planillas.id"), nullable=False)
+    colaborador_id = Column(Integer, ForeignKey("colaboradores.id"), nullable=False)
+    sueldo_base = Column(Float, nullable=False, default=0)
+    dias_falta = Column(Integer, nullable=False, default=0)
+    monto_descuento_faltas = Column(Float, nullable=False, default=0)
+    minutos_tardanza = Column(Integer, nullable=False, default=0)
+    monto_descuento_tardanzas = Column(Float, nullable=False, default=0)
+    otros_descuentos = Column(Float, nullable=False, default=0)
+    observaciones = Column(String, nullable=True)
+
+    planilla = relationship("Planilla", back_populates="detalles")
+    colaborador = relationship("Colaborador")
+
+
+class Documento(Base):
+    """
+    Documento con seguimiento de vencimiento: permisos municipales,
+    archivo técnico, licitaciones, u otro. Puede estar ligado a un
+    proyecto específico, o ser general de la empresa (ej. licencia de
+    funcionamiento).
+    """
+    __tablename__ = "documentos"
+
+    id = Column(Integer, primary_key=True, index=True)
+    negocio_id = Column(Integer, ForeignKey("negocios.id"), nullable=False)
+    proyecto_id = Column(Integer, ForeignKey("proyectos.id"), nullable=True)
+    tipo = Column(String, nullable=False)  # permiso_municipal, archivo_tecnico, licitacion, otro
+    nombre = Column(String, nullable=False)
+    numero = Column(String, nullable=True)  # numero de expediente/licencia/licitacion
+    entidad = Column(String, nullable=True)  # municipalidad, entidad licitante, etc.
+    fecha_emision = Column(DateTime, nullable=True)
+    fecha_vencimiento = Column(DateTime, nullable=True)
+    estado = Column(String, nullable=False, default="vigente")
+    archivo_url = Column(String, nullable=True)
+    observaciones = Column(String, nullable=True)
+    responsable_id = Column(Integer, ForeignKey("colaboradores.id"), nullable=True)
+
+    negocio = relationship("Negocio")
+    proyecto = relationship("Proyecto")
+    responsable = relationship("Colaborador")
+
+
 class Negocio(Base):
     """Constructora Lagunes / Librería."""
     __tablename__ = "negocios"
@@ -41,6 +103,8 @@ class Colaborador(Base):
     rol = Column(String, nullable=False)  # admin, dibujante, cajero, ventas, etc.
     activo = Column(Boolean, default=True)
     creado_en = Column(DateTime, default=ahora_peru)
+    sueldo_semanal = Column(Float, nullable=True)
+    hora_entrada_esperada = Column(String, nullable=True)  # "HH:MM", para calcular tardanzas
 
     negocio = relationship("Negocio", back_populates="colaboradores")
     usuario = relationship("Usuario", back_populates="colaborador", uselist=False)
@@ -285,12 +349,48 @@ class Proyecto(Base):
     estado = Column(String, nullable=False, default="cotizacion")  # cotizacion, en_proceso, entregado, cancelado
     fecha_inicio = Column(DateTime, default=ahora_peru)
     fecha_entrega_estimada = Column(DateTime, nullable=True)
+    presupuesto = Column(Float, nullable=True)  # monto planeado, para comparar contra lo facturado
 
     cliente = relationship("Cliente", back_populates="proyectos")
     ordenes = relationship("OrdenServicio", back_populates="proyecto", cascade="all, delete-orphan")
     pagos = relationship(
         "PagoProyecto", back_populates="proyecto", cascade="all, delete-orphan", order_by="PagoProyecto.fecha_pago"
     )
+    contratos = relationship("Contrato", back_populates="proyecto", cascade="all, delete-orphan")
+    registros_tiempo = relationship("RegistroTiempo", back_populates="proyecto", cascade="all, delete-orphan")
+
+
+class Contrato(Base):
+    """Un contrato (o adenda) asociado a un proyecto."""
+    __tablename__ = "contratos"
+
+    id = Column(Integer, primary_key=True, index=True)
+    proyecto_id = Column(Integer, ForeignKey("proyectos.id"), nullable=False)
+    numero = Column(String, nullable=True)  # "CONT-2026-001"
+    fecha_firma = Column(DateTime, nullable=True)
+    monto_contrato = Column(Float, nullable=True)
+    fecha_inicio = Column(DateTime, nullable=True)
+    fecha_fin_estimada = Column(DateTime, nullable=True)
+    estado = Column(String, nullable=False, default="vigente")  # vigente, finalizado, rescindido
+    archivo_url = Column(String, nullable=True)  # link al documento (Drive, etc.)
+    observaciones = Column(String, nullable=True)
+
+    proyecto = relationship("Proyecto", back_populates="contratos")
+
+
+class RegistroTiempo(Base):
+    """Horas dedicadas por un colaborador a un proyecto, en una fecha dada."""
+    __tablename__ = "registros_tiempo"
+
+    id = Column(Integer, primary_key=True, index=True)
+    proyecto_id = Column(Integer, ForeignKey("proyectos.id"), nullable=False)
+    colaborador_id = Column(Integer, ForeignKey("colaboradores.id"), nullable=False)
+    fecha = Column(Date, default=lambda: ahora_peru().date())
+    horas = Column(Float, nullable=False)
+    descripcion = Column(String, nullable=True)
+
+    proyecto = relationship("Proyecto", back_populates="registros_tiempo")
+    colaborador = relationship("Colaborador")
 
 
 class OrdenServicio(Base):

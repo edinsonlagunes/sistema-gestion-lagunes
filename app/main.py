@@ -9,10 +9,12 @@ from app.routers import (
     clientes,
     colaboradores,
     compras,
+    documentos,
     finanzas,
     impresiones,
     insumos,
     negocios,
+    planillas,
     proyectos,
     puestos_trabajo,
     servicios,
@@ -37,12 +39,14 @@ app.add_middleware(
 )
 
 app.include_router(negocios.router)
+app.include_router(planillas.router)
 app.include_router(colaboradores.router)
 app.include_router(usuarios.router)
 app.include_router(finanzas.router)
 app.include_router(insumos.router)
 app.include_router(insumos.proveedores_router)
 app.include_router(compras.router)
+app.include_router(documentos.router)
 app.include_router(servicios.router)
 app.include_router(caja.router)
 app.include_router(caja_chica.router)

@@ -24,10 +24,20 @@ class ColaboradorBase(BaseModel):
     negocio_id: int
     rol: str
     activo: bool = True
+    sueldo_semanal: Optional[float] = None
+    hora_entrada_esperada: Optional[str] = None  # "HH:MM"
 
 
 class ColaboradorCreate(ColaboradorBase):
     pass
+
+
+class ColaboradorUpdate(BaseModel):
+    nombre: Optional[str] = None
+    rol: Optional[str] = None
+    activo: Optional[bool] = None
+    sueldo_semanal: Optional[float] = None
+    hora_entrada_esperada: Optional[str] = None
 
 
 class Colaborador(ColaboradorBase):
@@ -308,6 +318,7 @@ class ProyectoBase(BaseModel):
     tipo_proyecto: Optional[str] = None
     estado: str = "cotizacion"
     fecha_entrega_estimada: Optional[datetime] = None
+    presupuesto: Optional[float] = None
 
 
 class ProyectoCreate(ProyectoBase):
@@ -323,6 +334,7 @@ class ProyectoUpdate(BaseModel):
     tipo_proyecto: Optional[str] = None
     cliente_id: Optional[int] = None
     fecha_entrega_estimada: Optional[datetime] = None
+    presupuesto: Optional[float] = None
 
 
 class OrdenServicioCreate(BaseModel):
@@ -391,12 +403,159 @@ class ResumenPagoProyecto(BaseModel):
     ultimo_pago_fecha: Optional[datetime] = None
 
 
+class ContratoCreate(BaseModel):
+    numero: Optional[str] = None
+    fecha_firma: Optional[datetime] = None
+    monto_contrato: Optional[float] = None
+    fecha_inicio: Optional[datetime] = None
+    fecha_fin_estimada: Optional[datetime] = None
+    estado: str = "vigente"  # vigente, finalizado, rescindido
+    archivo_url: Optional[str] = None
+    observaciones: Optional[str] = None
+
+
+class ContratoUpdate(BaseModel):
+    numero: Optional[str] = None
+    fecha_firma: Optional[datetime] = None
+    monto_contrato: Optional[float] = None
+    fecha_inicio: Optional[datetime] = None
+    fecha_fin_estimada: Optional[datetime] = None
+    estado: Optional[str] = None
+    archivo_url: Optional[str] = None
+    observaciones: Optional[str] = None
+
+
+class ContratoOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    proyecto_id: int
+    numero: Optional[str] = None
+    fecha_firma: Optional[datetime] = None
+    monto_contrato: Optional[float] = None
+    fecha_inicio: Optional[datetime] = None
+    fecha_fin_estimada: Optional[datetime] = None
+    estado: str
+    archivo_url: Optional[str] = None
+    observaciones: Optional[str] = None
+
+
+class RegistroTiempoCreate(BaseModel):
+    colaborador_id: int
+    fecha: Optional[date] = None
+    horas: float
+    descripcion: Optional[str] = None
+
+
+class RegistroTiempoOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    proyecto_id: int
+    colaborador_id: int
+    fecha: date
+    horas: float
+    descripcion: Optional[str] = None
+
+
 class ProyectoDetalle(Proyecto):
     ordenes: list[OrdenServicioOut]
     pagos: list[PagoProyectoOut]
+    contratos: list[ContratoOut]
+    registros_tiempo: list[RegistroTiempoOut]
     total_facturado: float
     total_pagado: float
     saldo_pendiente: float
+    total_horas: float
+    porcentaje_presupuesto_ejecutado: Optional[float] = None
+
+
+# ---------- Planillas (pagos semanales) ----------
+class PlanillaGenerar(BaseModel):
+    negocio_id: int
+    fecha_inicio: date
+    fecha_fin: date
+
+
+class DetallePlanillaUpdate(BaseModel):
+    otros_descuentos: Optional[float] = None
+    observaciones: Optional[str] = None
+
+
+class DetallePlanillaOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    planilla_id: int
+    colaborador_id: int
+    sueldo_base: float
+    dias_falta: int
+    monto_descuento_faltas: float
+    minutos_tardanza: int
+    monto_descuento_tardanzas: float
+    otros_descuentos: float
+    observaciones: Optional[str] = None
+    monto_neto: float
+
+
+class PlanillaOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    negocio_id: int
+    fecha_inicio: date
+    fecha_fin: date
+    estado: str
+    fecha_pago: Optional[datetime] = None
+
+
+class PlanillaDetalle(PlanillaOut):
+    detalles: list[DetallePlanillaOut]
+    total_neto: float
+
+
+# ---------- Documentos (permisos, archivo técnico, licitaciones) ----------
+class DocumentoCreate(BaseModel):
+    negocio_id: int
+    proyecto_id: Optional[int] = None
+    tipo: str  # permiso_municipal, archivo_tecnico, licitacion, otro
+    nombre: str
+    numero: Optional[str] = None
+    entidad: Optional[str] = None
+    fecha_emision: Optional[datetime] = None
+    fecha_vencimiento: Optional[datetime] = None
+    estado: str = "vigente"
+    archivo_url: Optional[str] = None
+    observaciones: Optional[str] = None
+    responsable_id: Optional[int] = None
+
+
+class DocumentoUpdate(BaseModel):
+    proyecto_id: Optional[int] = None
+    tipo: Optional[str] = None
+    nombre: Optional[str] = None
+    numero: Optional[str] = None
+    entidad: Optional[str] = None
+    fecha_emision: Optional[datetime] = None
+    fecha_vencimiento: Optional[datetime] = None
+    estado: Optional[str] = None
+    archivo_url: Optional[str] = None
+    observaciones: Optional[str] = None
+    responsable_id: Optional[int] = None
+
+
+class DocumentoOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    negocio_id: int
+    proyecto_id: Optional[int] = None
+    tipo: str
+    nombre: str
+    numero: Optional[str] = None
+    entidad: Optional[str] = None
+    fecha_emision: Optional[datetime] = None
+    fecha_vencimiento: Optional[datetime] = None
+    estado: str
+    archivo_url: Optional[str] = None
+    observaciones: Optional[str] = None
+    responsable_id: Optional[int] = None
+    dias_para_vencer: Optional[int] = None
 
 
 # ---------- Puestos de trabajo y equipos ----------

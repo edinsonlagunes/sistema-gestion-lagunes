@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app import models, schemas
-from app.auth import obtener_usuario_actual
+from app.auth import obtener_usuario_actual, requerir_admin
 from app.database import get_db
 
 router = APIRouter(prefix="/colaboradores", tags=["Colaboradores"], dependencies=[Depends(obtener_usuario_actual)])
@@ -33,4 +33,24 @@ def obtener_colaborador(colaborador_id: int, db: Session = Depends(get_db)):
     colaborador = db.query(models.Colaborador).get(colaborador_id)
     if not colaborador:
         raise HTTPException(status_code=404, detail="Colaborador no encontrado")
+    return colaborador
+
+
+@router.patch("/{colaborador_id}", response_model=schemas.Colaborador)
+def actualizar_colaborador(
+    colaborador_id: int,
+    data: schemas.ColaboradorUpdate,
+    db: Session = Depends(get_db),
+    _admin: models.Usuario = Depends(requerir_admin),
+):
+    """Edita nombre, rol, sueldo semanal u horario esperado. Solo administradores."""
+    colaborador = db.query(models.Colaborador).get(colaborador_id)
+    if not colaborador:
+        raise HTTPException(status_code=404, detail="Colaborador no encontrado")
+
+    for campo, valor in data.model_dump(exclude_unset=True).items():
+        setattr(colaborador, campo, valor)
+
+    db.commit()
+    db.refresh(colaborador)
     return colaborador

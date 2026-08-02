@@ -294,21 +294,59 @@ financiero que faltaba: cuentas por pagar a proveedores, y caja chica.
 lo genera, por el monto real. `app/migrate.py` corrige cualquier egreso
 viejo que se haya generado con la lógica anterior.
 
-## 8. Siguiente paso sugerido
+## 8. Módulo ampliado — Control operativo de proyectos (agregado)
+
+| Endpoint | Qué hace |
+|---|---|
+| `presupuesto` en `/proyectos/` | Monto planeado del proyecto (opcional). `ProyectoDetalle` ahora trae `porcentaje_presupuesto_ejecutado` (facturado ÷ presupuesto) |
+| `POST/GET /proyectos/{id}/contratos` | Contratos y adendas del proyecto (número, monto, fechas, estado, link al documento) — crear/editar/quitar son **solo administradores** |
+| `PATCH/DELETE /proyectos/{id}/contratos/{id}` | Editar o quitar un contrato — **solo administradores** |
+| `POST/GET /proyectos/{id}/tiempos` | Horas dedicadas por un colaborador al proyecto, con fecha y descripción — **cualquier usuario logueado puede registrar su propio tiempo** |
+| `DELETE /proyectos/{id}/tiempos/{id}` | Quitar un registro de tiempo mal anotado — **solo administradores** (para no alterar el historial sin control) |
+
+## 9. Módulo ampliado — Gestión documental con vencimientos (agregado)
+
+Cubre de una sola pieza tres puntos: permisos municipales, archivo
+técnico, y licitaciones — todos son, en el fondo, "documentos que hay
+que vigilar antes de que venzan".
+
+| Endpoint | Qué hace |
+|---|---|
+| `GET/POST /documentos/` | Documentos (permiso municipal, archivo técnico, licitación, u otro), ligados opcionalmente a un proyecto. Crear/editar/quitar — **solo administradores** |
+| `GET /documentos/vencimientos-proximos?dias=30&negocio_id=` | Documentos que vencen dentro de los próximos N días, o que ya vencieron — para darles seguimiento antes de que se conviertan en un problema |
+| `PATCH /documentos/{id}` | Editar (ej. renovar la fecha de vencimiento tras un trámite) — **solo administradores** |
+
+Cada documento trae `dias_para_vencer` calculado (negativo si ya venció).
+
+## 10. Módulo ampliado — Planillas (agregado)
+
+Pagos semanales, con faltas y tardanzas calculadas automáticamente a
+partir de la asistencia real (no hay que contarlas a mano).
+
+| Endpoint | Qué hace |
+|---|---|
+| `PATCH /colaboradores/{id}` | Ahora se le puede asignar `sueldo_semanal` y `hora_entrada_esperada` ("HH:MM") a cada colaborador — **solo administradores** |
+| `POST /planillas/generar` | Genera el borrador de la semana: por cada colaborador con sueldo asignado, cuenta sus faltas (días laborables lunes-sábado sin asistencia) y tardanzas (minutos de diferencia contra su hora esperada), y calcula el descuento — **solo administradores** |
+| `GET /planillas/{id}` | Detalle: sueldo base, faltas, tardanzas, descuentos, y el neto por cada colaborador |
+| `PATCH /planillas/{id}/detalles/{detalle_id}` | Ajustar un detalle antes de pagar (ej. agregar otro descuento) — **solo administradores** |
+| `POST /planillas/{id}/pagar` | Marca la planilla como pagada y genera el egreso real por el total neto — ya no se puede editar después — **solo administradores** |
+
+**Fórmula usada** (ajustable en `app/routers/planillas.py`): valor del
+día = sueldo semanal ÷ 6; valor del minuto = valor del día ÷ (8 horas ×
+60). Si tu jornada real es distinta, dímelo y ajusto las constantes
+`DIAS_LABORABLES_SEMANA` y `HORAS_JORNADA`.
+
+## 11. Siguiente paso sugerido
 
 Con esto, las 5 fases del roadmap original ya están construidas y
-probadas, más el primer bloque de la ampliación (Finanzas y Facturación).
-Quedan pendientes, en el orden acordado:
+probadas, más los Módulos 1 a 4 de la ampliación (Finanzas y
+Facturación; Control operativo de proyectos; Gestión documental;
+Planillas). Queda pendiente, en el orden acordado:
 
-2. Presupuesto por proyecto (monitoreo de presupuesto vs. gastado)
-3. Gestión documental con vencimientos (permisos municipales, contratos, licitaciones)
-4. Planillas
 5. Logística/mantenimiento/agenda de oficina
 
 Y, aparte de eso:
 - **Instalar PaperCut o YSoft** en tus PCs/impresoras (paso físico) y
   luego automatizar la carga de su reporte hacia `/impresiones/importar-csv`.
-- **Una interfaz visual** (pantallas, no solo `/docs`) para que tus
-  colaboradores —cajeros, dibujantes— usen el sistema día a día sin tener
-  que tocar la documentación técnica de la API. Es el paso natural ahora
-  que el backend completo ya funciona y está asegurado.
+- **Interfaz visual** para lo que se agregó en los Módulos 1 a 4 — el
+  frontend todavía solo cubre las 5 fases originales.

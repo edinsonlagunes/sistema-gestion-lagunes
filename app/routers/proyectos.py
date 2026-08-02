@@ -16,6 +16,8 @@ ESTADOS_VALIDOS = {"cotizacion", "en_proceso", "entregado", "cancelado"}
 def _a_detalle(proyecto: models.Proyecto) -> schemas.ProyectoDetalle:
     total_facturado = sum(o.subtotal for o in proyecto.ordenes)
     total_pagado = sum(p.monto for p in proyecto.pagos)
+    total_horas = sum(r.horas for r in proyecto.registros_tiempo)
+    porcentaje = (total_facturado / proyecto.presupuesto * 100) if proyecto.presupuesto else None
     return schemas.ProyectoDetalle(
         id=proyecto.id,
         negocio_id=proyecto.negocio_id,
@@ -25,11 +27,16 @@ def _a_detalle(proyecto: models.Proyecto) -> schemas.ProyectoDetalle:
         estado=proyecto.estado,
         fecha_inicio=proyecto.fecha_inicio,
         fecha_entrega_estimada=proyecto.fecha_entrega_estimada,
+        presupuesto=proyecto.presupuesto,
         ordenes=proyecto.ordenes,
         pagos=proyecto.pagos,
+        contratos=proyecto.contratos,
+        registros_tiempo=proyecto.registros_tiempo,
         total_facturado=total_facturado,
         total_pagado=total_pagado,
         saldo_pendiente=total_facturado - total_pagado,
+        total_horas=total_horas,
+        porcentaje_presupuesto_ejecutado=porcentaje,
     )
 
 
@@ -369,6 +376,128 @@ def eliminar_pago(
 
     db.query(models.Ingreso).filter(models.Ingreso.pago_proyecto_id == pago.id).delete()
     db.delete(pago)
+    db.commit()
+    proyecto = db.query(models.Proyecto).get(proyecto_id)
+    return _a_detalle(proyecto)
+
+
+# ---------- Contratos ----------
+
+@router.post("/{proyecto_id}/contratos", response_model=schemas.ProyectoDetalle)
+def crear_contrato(
+    proyecto_id: int,
+    data: schemas.ContratoCreate,
+    db: Session = Depends(get_db),
+    _admin: models.Usuario = Depends(requerir_admin),
+):
+    """Registra un contrato (o adenda) del proyecto. Solo administradores."""
+    proyecto = db.query(models.Proyecto).get(proyecto_id)
+    if not proyecto:
+        raise HTTPException(status_code=404, detail="Proyecto no encontrado")
+
+    contrato = models.Contrato(proyecto_id=proyecto_id, **data.model_dump())
+    db.add(contrato)
+    db.commit()
+    db.refresh(proyecto)
+    return _a_detalle(proyecto)
+
+
+@router.patch("/{proyecto_id}/contratos/{contrato_id}", response_model=schemas.ProyectoDetalle)
+def actualizar_contrato(
+    proyecto_id: int,
+    contrato_id: int,
+    data: schemas.ContratoUpdate,
+    db: Session = Depends(get_db),
+    _admin: models.Usuario = Depends(requerir_admin),
+):
+    """Edita un contrato (ej. cambiar su estado a finalizado). Solo administradores."""
+    contrato = (
+        db.query(models.Contrato)
+        .filter(models.Contrato.id == contrato_id, models.Contrato.proyecto_id == proyecto_id)
+        .first()
+    )
+    if not contrato:
+        raise HTTPException(status_code=404, detail="Contrato no encontrado")
+
+    for campo, valor in data.model_dump(exclude_unset=True).items():
+        setattr(contrato, campo, valor)
+
+    db.commit()
+    proyecto = db.query(models.Proyecto).get(proyecto_id)
+    return _a_detalle(proyecto)
+
+
+@router.delete("/{proyecto_id}/contratos/{contrato_id}", response_model=schemas.ProyectoDetalle)
+def eliminar_contrato(
+    proyecto_id: int,
+    contrato_id: int,
+    db: Session = Depends(get_db),
+    _admin: models.Usuario = Depends(requerir_admin),
+):
+    """Quita un contrato registrado por error. Solo administradores."""
+    contrato = (
+        db.query(models.Contrato)
+        .filter(models.Contrato.id == contrato_id, models.Contrato.proyecto_id == proyecto_id)
+        .first()
+    )
+    if not contrato:
+        raise HTTPException(status_code=404, detail="Contrato no encontrado")
+
+    db.delete(contrato)
+    db.commit()
+    proyecto = db.query(models.Proyecto).get(proyecto_id)
+    return _a_detalle(proyecto)
+
+
+# ---------- Control de tiempos ----------
+
+@router.post("/{proyecto_id}/tiempos", response_model=schemas.ProyectoDetalle)
+def registrar_tiempo(
+    proyecto_id: int,
+    data: schemas.RegistroTiempoCreate,
+    db: Session = Depends(get_db),
+):
+    """
+    Registra horas dedicadas al proyecto por un colaborador, en una
+    fecha dada. Cualquier usuario logueado puede anotar su propio
+    tiempo (o el de otro colaborador, si lleva el control por todos).
+    """
+    proyecto = db.query(models.Proyecto).get(proyecto_id)
+    if not proyecto:
+        raise HTTPException(status_code=404, detail="Proyecto no encontrado")
+    if not db.query(models.Colaborador).get(data.colaborador_id):
+        raise HTTPException(status_code=404, detail="Colaborador no encontrado")
+
+    registro = models.RegistroTiempo(
+        proyecto_id=proyecto_id,
+        colaborador_id=data.colaborador_id,
+        fecha=data.fecha or ahora_peru().date(),
+        horas=data.horas,
+        descripcion=data.descripcion,
+    )
+    db.add(registro)
+    db.commit()
+    db.refresh(proyecto)
+    return _a_detalle(proyecto)
+
+
+@router.delete("/{proyecto_id}/tiempos/{registro_id}", response_model=schemas.ProyectoDetalle)
+def eliminar_tiempo(
+    proyecto_id: int,
+    registro_id: int,
+    db: Session = Depends(get_db),
+    _admin: models.Usuario = Depends(requerir_admin),
+):
+    """Quita un registro de tiempo mal anotado. Solo administradores (para no alterar el historial sin control)."""
+    registro = (
+        db.query(models.RegistroTiempo)
+        .filter(models.RegistroTiempo.id == registro_id, models.RegistroTiempo.proyecto_id == proyecto_id)
+        .first()
+    )
+    if not registro:
+        raise HTTPException(status_code=404, detail="Registro no encontrado")
+
+    db.delete(registro)
     db.commit()
     proyecto = db.query(models.Proyecto).get(proyecto_id)
     return _a_detalle(proyecto)
