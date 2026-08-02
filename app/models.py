@@ -66,6 +66,7 @@ class Proveedor(Base):
     contacto = Column(String, nullable=True)
 
     compras = relationship("Compra", back_populates="proveedor")
+    pagos = relationship("PagoProveedor", back_populates="proveedor", cascade="all, delete-orphan")
 
 
 class Insumo(Base):
@@ -121,8 +122,63 @@ class Egreso(Base):
     monto = Column(Float, nullable=False)
     descripcion = Column(String, nullable=True)
     fecha = Column(DateTime, default=ahora_peru)
+    pago_proveedor_id = Column(Integer, ForeignKey("pagos_proveedor.id"), nullable=True)
 
     negocio = relationship("Negocio", back_populates="egresos")
+
+
+class PagoProveedor(Base):
+    """
+    Un pago realizado a un proveedor. Separado de Compra a propósito —
+    comprar (recibir el insumo) y pagar son dos momentos distintos; la
+    diferencia entre lo comprado y lo pagado es la cuenta por pagar.
+    """
+    __tablename__ = "pagos_proveedor"
+
+    id = Column(Integer, primary_key=True, index=True)
+    proveedor_id = Column(Integer, ForeignKey("proveedores.id"), nullable=False)
+    negocio_id = Column(Integer, ForeignKey("negocios.id"), nullable=False)
+    monto = Column(Float, nullable=False)
+    fecha_pago = Column(DateTime, nullable=False, default=ahora_peru)
+    medio_pago = Column(String, nullable=False, default="transferencia")
+    descripcion = Column(String, nullable=True)
+
+    proveedor = relationship("Proveedor", back_populates="pagos")
+    negocio = relationship("Negocio")
+
+
+class CajaChica(Base):
+    """Fondo fijo para gastos menores de oficina, separado de la caja del POS."""
+    __tablename__ = "cajas_chicas"
+
+    id = Column(Integer, primary_key=True, index=True)
+    negocio_id = Column(Integer, ForeignKey("negocios.id"), nullable=False)
+    nombre = Column(String, nullable=False, default="Caja chica")
+    monto_fondo = Column(Float, nullable=False, default=0)
+
+    negocio = relationship("Negocio")
+    movimientos = relationship(
+        "MovimientoCajaChica", back_populates="caja_chica", cascade="all, delete-orphan", order_by="MovimientoCajaChica.fecha"
+    )
+
+
+class MovimientoCajaChica(Base):
+    """Un gasto menor (genera egreso real) o una reposición de fondo (no genera egreso)."""
+    __tablename__ = "movimientos_caja_chica"
+
+    id = Column(Integer, primary_key=True, index=True)
+    caja_chica_id = Column(Integer, ForeignKey("cajas_chicas.id"), nullable=False)
+    tipo = Column(String, nullable=False)  # gasto, reposicion
+    monto = Column(Float, nullable=False)
+    categoria = Column(String, nullable=True)  # utiles, transporte, limpieza, otros (solo gastos)
+    descripcion = Column(String, nullable=True)
+    comprobante = Column(String, nullable=True)
+    colaborador_id = Column(Integer, ForeignKey("colaboradores.id"), nullable=True)
+    fecha = Column(DateTime, default=ahora_peru)
+    egreso_id = Column(Integer, ForeignKey("egresos.id"), nullable=True)  # solo para gastos
+
+    caja_chica = relationship("CajaChica", back_populates="movimientos")
+    colaborador = relationship("Colaborador")
 
 
 class Servicio(Base):

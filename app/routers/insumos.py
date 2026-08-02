@@ -2,8 +2,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app import models, schemas
-from app.auth import obtener_usuario_actual
+from app.auth import obtener_usuario_actual, requerir_admin
 from app.database import get_db
+from app.zona_horaria import ahora_peru
 
 router = APIRouter(prefix="/insumos", tags=["Insumos"], dependencies=[Depends(obtener_usuario_actual)])
 proveedores_router = APIRouter(
@@ -42,3 +43,190 @@ def crear_proveedor(data: schemas.ProveedorCreate, db: Session = Depends(get_db)
     db.commit()
     db.refresh(proveedor)
     return proveedor
+
+
+def _totales_proveedor(proveedor: models.Proveedor, negocio_id: int | None = None) -> tuple[float, float]:
+    compras = proveedor.compras
+    pagos = proveedor.pagos
+    if negocio_id is not None:
+        compras = [c for c in compras if c.negocio_id == negocio_id]
+        pagos = [p for p in pagos if p.negocio_id == negocio_id]
+    total_comprado = sum(c.costo for c in compras)
+    total_pagado = sum(p.monto for p in pagos)
+    return total_comprado, total_pagado
+
+
+@proveedores_router.get("/resumen-pagos", response_model=list[schemas.ResumenPagoProveedor])
+def resumen_pagos_proveedores(negocio_id: int | None = None, db: Session = Depends(get_db)):
+    """
+    Para el Dashboard: cuentas por pagar — por cada proveedor, cuánto se
+    le ha comprado, cuánto se le ha pagado, y cuánto falta. Solo incluye
+    proveedores con saldo pendiente.
+    """
+    resultado = []
+    for proveedor in db.query(models.Proveedor).all():
+        total_comprado, total_pagado = _totales_proveedor(proveedor, negocio_id)
+        saldo = total_comprado - total_pagado
+        if saldo <= 0:
+            continue
+
+        pagos = proveedor.pagos if negocio_id is None else [p for p in proveedor.pagos if p.negocio_id == negocio_id]
+        ultimo_pago = max(pagos, key=lambda p: p.fecha_pago) if pagos else None
+
+        resultado.append(
+            schemas.ResumenPagoProveedor(
+                proveedor_id=proveedor.id,
+                proveedor_nombre=proveedor.nombre,
+                total_comprado=total_comprado,
+                total_pagado=total_pagado,
+                saldo_pendiente=saldo,
+                ultimo_pago_monto=ultimo_pago.monto if ultimo_pago else None,
+                ultimo_pago_fecha=ultimo_pago.fecha_pago if ultimo_pago else None,
+            )
+        )
+
+    resultado.sort(key=lambda r: r.saldo_pendiente, reverse=True)
+    return resultado
+
+
+@proveedores_router.get("/{proveedor_id}", response_model=schemas.ProveedorDetalle)
+def obtener_proveedor(proveedor_id: int, db: Session = Depends(get_db)):
+    proveedor = db.query(models.Proveedor).get(proveedor_id)
+    if not proveedor:
+        raise HTTPException(status_code=404, detail="Proveedor no encontrado")
+    total_comprado, total_pagado = _totales_proveedor(proveedor)
+    return schemas.ProveedorDetalle(
+        id=proveedor.id,
+        nombre=proveedor.nombre,
+        contacto=proveedor.contacto,
+        total_comprado=total_comprado,
+        total_pagado=total_pagado,
+        saldo_pendiente=total_comprado - total_pagado,
+        pagos=proveedor.pagos,
+    )
+
+
+@proveedores_router.post("/{proveedor_id}/pagos", response_model=schemas.ProveedorDetalle)
+def registrar_pago_proveedor(
+    proveedor_id: int,
+    data: schemas.PagoProveedorCreate,
+    negocio_id: int,
+    db: Session = Depends(get_db),
+    _admin: models.Usuario = Depends(requerir_admin),
+):
+    """
+    Registra un pago real a un proveedor — genera el egreso en finanzas
+    por el monto efectivamente pagado (a diferencia de comprar, que no
+    mueve caja todavía). Solo administradores.
+    """
+    proveedor = db.query(models.Proveedor).get(proveedor_id)
+    if not proveedor:
+        raise HTTPException(status_code=404, detail="Proveedor no encontrado")
+    if not db.query(models.Negocio).get(negocio_id):
+        raise HTTPException(status_code=404, detail="Negocio no encontrado")
+
+    pago = models.PagoProveedor(
+        proveedor_id=proveedor.id,
+        negocio_id=negocio_id,
+        monto=data.monto,
+        fecha_pago=data.fecha_pago or ahora_peru(),
+        medio_pago=data.medio_pago,
+        descripcion=data.descripcion,
+    )
+    db.add(pago)
+    db.flush()
+
+    db.add(
+        models.Egreso(
+            negocio_id=negocio_id,
+            categoria="pago_proveedor",
+            monto=pago.monto,
+            descripcion=f"Pago a proveedor - {proveedor.nombre}" + (f" ({data.descripcion})" if data.descripcion else ""),
+            fecha=pago.fecha_pago,
+            pago_proveedor_id=pago.id,
+        )
+    )
+
+    db.commit()
+    db.refresh(proveedor)
+    total_comprado, total_pagado = _totales_proveedor(proveedor)
+    return schemas.ProveedorDetalle(
+        id=proveedor.id,
+        nombre=proveedor.nombre,
+        contacto=proveedor.contacto,
+        total_comprado=total_comprado,
+        total_pagado=total_pagado,
+        saldo_pendiente=total_comprado - total_pagado,
+        pagos=proveedor.pagos,
+    )
+
+
+@proveedores_router.patch("/{proveedor_id}/pagos/{pago_id}", response_model=schemas.ProveedorDetalle)
+def actualizar_pago_proveedor(
+    proveedor_id: int,
+    pago_id: int,
+    data: schemas.PagoProveedorUpdate,
+    db: Session = Depends(get_db),
+    _admin: models.Usuario = Depends(requerir_admin),
+):
+    """Corrige un pago a proveedor ya registrado y su egreso vinculado. Solo administradores."""
+    pago = (
+        db.query(models.PagoProveedor)
+        .filter(models.PagoProveedor.id == pago_id, models.PagoProveedor.proveedor_id == proveedor_id)
+        .first()
+    )
+    if not pago:
+        raise HTTPException(status_code=404, detail="Pago no encontrado")
+
+    for campo, valor in data.model_dump(exclude_unset=True).items():
+        setattr(pago, campo, valor)
+
+    egreso = db.query(models.Egreso).filter(models.Egreso.pago_proveedor_id == pago.id).first()
+    if egreso:
+        egreso.monto = pago.monto
+        egreso.fecha = pago.fecha_pago
+
+    db.commit()
+    proveedor = db.query(models.Proveedor).get(proveedor_id)
+    total_comprado, total_pagado = _totales_proveedor(proveedor)
+    return schemas.ProveedorDetalle(
+        id=proveedor.id,
+        nombre=proveedor.nombre,
+        contacto=proveedor.contacto,
+        total_comprado=total_comprado,
+        total_pagado=total_pagado,
+        saldo_pendiente=total_comprado - total_pagado,
+        pagos=proveedor.pagos,
+    )
+
+
+@proveedores_router.delete("/{proveedor_id}/pagos/{pago_id}", response_model=schemas.ProveedorDetalle)
+def eliminar_pago_proveedor(
+    proveedor_id: int,
+    pago_id: int,
+    db: Session = Depends(get_db),
+    _admin: models.Usuario = Depends(requerir_admin),
+):
+    """Quita un pago a proveedor registrado por error, junto con su egreso. Solo administradores."""
+    pago = (
+        db.query(models.PagoProveedor)
+        .filter(models.PagoProveedor.id == pago_id, models.PagoProveedor.proveedor_id == proveedor_id)
+        .first()
+    )
+    if not pago:
+        raise HTTPException(status_code=404, detail="Pago no encontrado")
+
+    db.query(models.Egreso).filter(models.Egreso.pago_proveedor_id == pago.id).delete()
+    db.delete(pago)
+    db.commit()
+    proveedor = db.query(models.Proveedor).get(proveedor_id)
+    total_comprado, total_pagado = _totales_proveedor(proveedor)
+    return schemas.ProveedorDetalle(
+        id=proveedor.id,
+        nombre=proveedor.nombre,
+        contacto=proveedor.contacto,
+        total_comprado=total_comprado,
+        total_pagado=total_pagado,
+        saldo_pendiente=total_comprado - total_pagado,
+        pagos=proveedor.pagos,
+    )

@@ -55,6 +55,13 @@ def migrar_columnas():
         else:
             print("ingresos.pago_proyecto_id ya existe — nada que hacer.")
 
+        if not _tiene_columna(inspector, "egresos", "pago_proveedor_id"):
+            print("Agregando columna pago_proveedor_id a egresos...")
+            conn.execute(text("ALTER TABLE egresos ADD COLUMN pago_proveedor_id INTEGER"))
+            conn.commit()
+        else:
+            print("egresos.pago_proveedor_id ya existe — nada que hacer.")
+
 
 def fix_ingresos_proyecto():
     """
@@ -111,9 +118,39 @@ def fix_ingresos_proyecto():
         db.close()
 
 
+def fix_egresos_proveedor():
+    """
+    Corrige el mismo error de diseño, ahora del lado de los proveedores:
+    registrar una compra generaba un egreso automático por el total,
+    como si ya se le hubiera pagado al proveedor. Borra esos egresos
+    viejos (se identifican por su categoría y descripción exactas, las
+    que usaba el código anterior, y por no tener un pago vinculado).
+    Idempotente.
+    """
+    db = SessionLocal()
+    try:
+        borrados = (
+            db.query(models.Egreso)
+            .filter(
+                models.Egreso.categoria == "compra_insumo",
+                models.Egreso.pago_proveedor_id.is_(None),
+                models.Egreso.descripcion.like("Compra de%"),
+            )
+            .delete(synchronize_session=False)
+        )
+        if borrados:
+            print(f"Se quitaron {borrados} egreso(s) generados incorrectamente al registrar compras.")
+        else:
+            print("No había egresos viejos de compras que corregir.")
+        db.commit()
+    finally:
+        db.close()
+
+
 def migrar():
     migrar_columnas()
     fix_ingresos_proyecto()
+    fix_egresos_proveedor()
     print("Migración completa.")
 
 

@@ -271,11 +271,41 @@ Está bien para probarlo tú mismo, pero antes de darle acceso a tus
 colaboradores conviene agregar autenticación por token — es un ajuste
 puntual, dime cuando quieras que lo hagamos.
 
-## 7. Siguiente paso sugerido
+## 7. Módulo ampliado — Finanzas y Facturación (agregado)
+
+Primera pieza de una ampliación mayor del sistema, organizada en 5 áreas
+(ver la conversación para el mapa completo). Esta cierra el círculo
+financiero que faltaba: cuentas por pagar a proveedores, y caja chica.
+
+| Endpoint | Qué hace |
+|---|---|
+| `GET/POST /proveedores/` | Ya existía — catálogo de proveedores |
+| `GET /proveedores/{id}` | Detalle: cuánto se le ha comprado, cuánto se le ha pagado, saldo pendiente e historial de pagos |
+| `GET /proveedores/resumen-pagos?negocio_id=` | Para el Dashboard: proveedores con saldo pendiente (cuentas por pagar) |
+| `POST /proveedores/{id}/pagos?negocio_id=` | Registra un pago real al proveedor — genera el egreso — **solo administradores** |
+| `PATCH/DELETE /proveedores/{id}/pagos/{pago_id}` | Corrige o quita un pago — **solo administradores** |
+| `GET/POST /caja-chica/` | Fondo fijo para gastos menores de oficina (distinto de la caja del POS) — crear es **solo administradores** |
+| `GET /caja-chica/{id}` | Detalle: fondo, saldo actual, historial de gastos y reposiciones |
+| `POST /caja-chica/{id}/movimientos` | Registra un gasto (genera egreso real, con comprobante) o una reposición de fondo (no genera egreso — el gasto ya se contó cuando ocurrió) — **solo administradores** |
+| `DELETE /caja-chica/{id}/movimientos/{id}` | Quita un movimiento mal registrado — **solo administradores** |
+
+**Mismo principio que ya aplicamos con los clientes**: registrar una
+*compra* ya no genera un egreso automático — solo *pagarle* al proveedor
+lo genera, por el monto real. `app/migrate.py` corrige cualquier egreso
+viejo que se haya generado con la lógica anterior.
+
+## 8. Siguiente paso sugerido
 
 Con esto, las 5 fases del roadmap original ya están construidas y
-probadas. Lo que queda pendiente no es backend, sino:
+probadas, más el primer bloque de la ampliación (Finanzas y Facturación).
+Quedan pendientes, en el orden acordado:
 
+2. Presupuesto por proyecto (monitoreo de presupuesto vs. gastado)
+3. Gestión documental con vencimientos (permisos municipales, contratos, licitaciones)
+4. Planillas
+5. Logística/mantenimiento/agenda de oficina
+
+Y, aparte de eso:
 - **Instalar PaperCut o YSoft** en tus PCs/impresoras (paso físico) y
   luego automatizar la carga de su reporte hacia `/impresiones/importar-csv`.
 - **Una interfaz visual** (pantallas, no solo `/docs`) para que tus

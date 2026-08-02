@@ -5,6 +5,7 @@ from app.database import Base, engine
 from app.routers import (
     asistencia,
     caja,
+    caja_chica,
     clientes,
     colaboradores,
     compras,
@@ -44,6 +45,7 @@ app.include_router(insumos.proveedores_router)
 app.include_router(compras.router)
 app.include_router(servicios.router)
 app.include_router(caja.router)
+app.include_router(caja_chica.router)
 app.include_router(ventas.router)
 app.include_router(clientes.router)
 app.include_router(proyectos.router)

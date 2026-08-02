@@ -19,9 +19,10 @@ def listar_compras(negocio_id: int | None = None, db: Session = Depends(get_db))
 @router.post("/", response_model=schemas.Compra)
 def registrar_compra(data: schemas.CompraCreate, db: Session = Depends(get_db)):
     """
-    Registra una compra de insumo: sube el stock automáticamente
-    y genera el egreso correspondiente en finanzas.
-    Así el inventario y la caja quedan sincronizados sin pasos manuales.
+    Registra una compra de insumo: sube el stock automáticamente. NO
+    genera egreso — eso solo pasa cuando se registra un pago real al
+    proveedor (ver /proveedores/{id}/pagos), para no contar como pagado
+    algo que todavía está pendiente (cuenta por pagar).
     """
     insumo = db.query(models.Insumo).get(data.insumo_id)
     if not insumo:
@@ -33,14 +34,6 @@ def registrar_compra(data: schemas.CompraCreate, db: Session = Depends(get_db)):
     db.add(compra)
 
     insumo.stock_actual += data.cantidad
-
-    egreso = models.Egreso(
-        negocio_id=data.negocio_id,
-        categoria="compra_insumo",
-        monto=data.costo,
-        descripcion=f"Compra de {data.cantidad} {insumo.unidad} de {insumo.nombre}",
-    )
-    db.add(egreso)
 
     db.commit()
     db.refresh(compra)

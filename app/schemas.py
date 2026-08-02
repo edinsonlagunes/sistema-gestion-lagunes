@@ -72,6 +72,48 @@ class Proveedor(ProveedorBase):
     id: int
 
 
+class PagoProveedorCreate(BaseModel):
+    monto: float
+    fecha_pago: Optional[datetime] = None
+    medio_pago: str = "transferencia"
+    descripcion: Optional[str] = None
+
+
+class PagoProveedorUpdate(BaseModel):
+    monto: Optional[float] = None
+    fecha_pago: Optional[datetime] = None
+    medio_pago: Optional[str] = None
+    descripcion: Optional[str] = None
+
+
+class PagoProveedorOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    proveedor_id: int
+    negocio_id: int
+    monto: float
+    fecha_pago: datetime
+    medio_pago: str
+    descripcion: Optional[str] = None
+
+
+class ProveedorDetalle(Proveedor):
+    total_comprado: float
+    total_pagado: float
+    saldo_pendiente: float
+    pagos: list[PagoProveedorOut]
+
+
+class ResumenPagoProveedor(BaseModel):
+    proveedor_id: int
+    proveedor_nombre: str
+    total_comprado: float
+    total_pagado: float
+    saldo_pendiente: float
+    ultimo_pago_monto: Optional[float] = None
+    ultimo_pago_fecha: Optional[datetime] = None
+
+
 # ---------- Insumo ----------
 class InsumoBase(BaseModel):
     negocio_id: int
@@ -404,6 +446,49 @@ class Asistencia(BaseModel):
     hora_entrada: datetime
     hora_salida: Optional[datetime] = None
     horas_trabajadas: Optional[float] = None
+
+
+# ---------- Caja chica ----------
+class CajaChicaCreate(BaseModel):
+    negocio_id: int
+    nombre: str = "Caja chica"
+    monto_fondo: float = 0
+
+
+class MovimientoCajaChicaCreate(BaseModel):
+    tipo: str  # gasto, reposicion
+    monto: float
+    categoria: Optional[str] = None
+    descripcion: Optional[str] = None
+    comprobante: Optional[str] = None
+    colaborador_id: Optional[int] = None
+    fecha: Optional[datetime] = None
+
+
+class MovimientoCajaChicaOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    caja_chica_id: int
+    tipo: str
+    monto: float
+    categoria: Optional[str] = None
+    descripcion: Optional[str] = None
+    comprobante: Optional[str] = None
+    colaborador_id: Optional[int] = None
+    fecha: datetime
+
+
+class CajaChicaOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    negocio_id: int
+    nombre: str
+    monto_fondo: float
+
+
+class CajaChicaDetalle(CajaChicaOut):
+    saldo_actual: float
+    movimientos: list[MovimientoCajaChicaOut]
 
 
 # ---------- Registros de impresión/ploteo (Fase 5) ----------
