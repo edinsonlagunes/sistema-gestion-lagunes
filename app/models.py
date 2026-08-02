@@ -465,6 +465,47 @@ class Equipo(Base):
     nombre = Column(String, nullable=False)  # "PC-01", "Canon IR2006", etc.
 
     puesto = relationship("PuestoTrabajo", back_populates="equipos")
+    mantenimientos = relationship("Mantenimiento", back_populates="equipo", cascade="all, delete-orphan")
+
+
+class Mantenimiento(Base):
+    """Un mantenimiento (preventivo o correctivo) realizado o programado para un equipo."""
+    __tablename__ = "mantenimientos"
+
+    id = Column(Integer, primary_key=True, index=True)
+    equipo_id = Column(Integer, ForeignKey("equipos.id"), nullable=False)
+    tipo = Column(String, nullable=False, default="preventivo")  # preventivo, correctivo
+    fecha_realizado = Column(DateTime, nullable=True)
+    fecha_proximo = Column(Date, nullable=True)  # próximo mantenimiento programado
+    descripcion = Column(String, nullable=True)
+    costo = Column(Float, nullable=True)
+    responsable_id = Column(Integer, ForeignKey("colaboradores.id"), nullable=True)
+    proveedor_id = Column(Integer, ForeignKey("proveedores.id"), nullable=True)
+
+    equipo = relationship("Equipo", back_populates="mantenimientos")
+    responsable = relationship("Colaborador")
+    proveedor = relationship("Proveedor")
+
+
+class EventoAgenda(Base):
+    """Un evento de la agenda del estudio: reunión, visita de obra, entrega, etc."""
+    __tablename__ = "eventos_agenda"
+
+    id = Column(Integer, primary_key=True, index=True)
+    negocio_id = Column(Integer, ForeignKey("negocios.id"), nullable=False)
+    proyecto_id = Column(Integer, ForeignKey("proyectos.id"), nullable=True)
+    titulo = Column(String, nullable=False)
+    descripcion = Column(String, nullable=True)
+    tipo = Column(String, nullable=False, default="reunion")  # reunion, visita_obra, entrega, otro
+    fecha_inicio = Column(DateTime, nullable=False)
+    fecha_fin = Column(DateTime, nullable=True)
+    ubicacion = Column(String, nullable=True)
+    responsable_id = Column(Integer, ForeignKey("colaboradores.id"), nullable=True)
+    estado = Column(String, nullable=False, default="pendiente")  # pendiente, completado, cancelado
+
+    negocio = relationship("Negocio")
+    proyecto = relationship("Proyecto")
+    responsable = relationship("Colaborador")
 
 
 class Asistencia(Base):

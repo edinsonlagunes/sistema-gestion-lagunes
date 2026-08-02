@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.database import Base, engine
 from app.routers import (
+    agenda,
     asistencia,
     caja,
     caja_chica,
@@ -13,6 +14,7 @@ from app.routers import (
     finanzas,
     impresiones,
     insumos,
+    mantenimientos,
     negocios,
     planillas,
     proyectos,
@@ -45,6 +47,8 @@ app.include_router(usuarios.router)
 app.include_router(finanzas.router)
 app.include_router(insumos.router)
 app.include_router(insumos.proveedores_router)
+app.include_router(agenda.router)
+app.include_router(mantenimientos.router)
 app.include_router(compras.router)
 app.include_router(documentos.router)
 app.include_router(servicios.router)

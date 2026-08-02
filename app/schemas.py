@@ -468,6 +468,83 @@ class ProyectoDetalle(Proyecto):
     porcentaje_presupuesto_ejecutado: Optional[float] = None
 
 
+# ---------- Mantenimiento de equipos ----------
+class MantenimientoCreate(BaseModel):
+    tipo: str = "preventivo"  # preventivo, correctivo
+    fecha_realizado: Optional[datetime] = None
+    fecha_proximo: Optional[date] = None
+    descripcion: Optional[str] = None
+    costo: Optional[float] = None
+    responsable_id: Optional[int] = None
+    proveedor_id: Optional[int] = None
+    generar_egreso: bool = True  # si tiene costo, registrar el egreso ahora mismo (se asumió pagado al momento)
+
+
+class MantenimientoUpdate(BaseModel):
+    tipo: Optional[str] = None
+    fecha_realizado: Optional[datetime] = None
+    fecha_proximo: Optional[date] = None
+    descripcion: Optional[str] = None
+    costo: Optional[float] = None
+    responsable_id: Optional[int] = None
+    proveedor_id: Optional[int] = None
+
+
+class MantenimientoOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    equipo_id: int
+    tipo: str
+    fecha_realizado: Optional[datetime] = None
+    fecha_proximo: Optional[date] = None
+    descripcion: Optional[str] = None
+    costo: Optional[float] = None
+    responsable_id: Optional[int] = None
+    proveedor_id: Optional[int] = None
+    dias_para_proximo: Optional[int] = None
+
+
+# ---------- Agenda del estudio ----------
+class EventoAgendaCreate(BaseModel):
+    negocio_id: int
+    proyecto_id: Optional[int] = None
+    titulo: str
+    descripcion: Optional[str] = None
+    tipo: str = "reunion"  # reunion, visita_obra, entrega, otro
+    fecha_inicio: datetime
+    fecha_fin: Optional[datetime] = None
+    ubicacion: Optional[str] = None
+    responsable_id: Optional[int] = None
+    estado: str = "pendiente"
+
+
+class EventoAgendaUpdate(BaseModel):
+    proyecto_id: Optional[int] = None
+    titulo: Optional[str] = None
+    descripcion: Optional[str] = None
+    tipo: Optional[str] = None
+    fecha_inicio: Optional[datetime] = None
+    fecha_fin: Optional[datetime] = None
+    ubicacion: Optional[str] = None
+    responsable_id: Optional[int] = None
+    estado: Optional[str] = None
+
+
+class EventoAgendaOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    negocio_id: int
+    proyecto_id: Optional[int] = None
+    titulo: str
+    descripcion: Optional[str] = None
+    tipo: str
+    fecha_inicio: datetime
+    fecha_fin: Optional[datetime] = None
+    ubicacion: Optional[str] = None
+    responsable_id: Optional[int] = None
+    estado: str
+
+
 # ---------- Planillas (pagos semanales) ----------
 class PlanillaGenerar(BaseModel):
     negocio_id: int

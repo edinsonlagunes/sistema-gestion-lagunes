@@ -336,17 +336,31 @@ día = sueldo semanal ÷ 6; valor del minuto = valor del día ÷ (8 horas ×
 60). Si tu jornada real es distinta, dímelo y ajusto las constantes
 `DIAS_LABORABLES_SEMANA` y `HORAS_JORNADA`.
 
-## 11. Siguiente paso sugerido
+## 11. Módulo ampliado — Logística, mantenimiento y agenda de oficina (agregado, último)
 
-Con esto, las 5 fases del roadmap original ya están construidas y
-probadas, más los Módulos 1 a 4 de la ampliación (Finanzas y
-Facturación; Control operativo de proyectos; Gestión documental;
-Planillas). Queda pendiente, en el orden acordado:
+La parte de "logística de suministro" ya la cubren `/insumos/`, `/compras/`
+y `/proveedores/` (con cuentas por pagar, desde el Módulo 1) — no hacía
+falta duplicarla. Lo nuevo es mantenimiento de equipos y la agenda.
 
-5. Logística/mantenimiento/agenda de oficina
+| Endpoint | Qué hace |
+|---|---|
+| `GET/POST /equipos/{id}/mantenimientos` | Mantenimiento preventivo/correctivo de un equipo (computadora, fotocopiadora, plotter). Si tiene costo, genera el egreso real — **solo administradores** |
+| `GET /mantenimientos/proximos?dias=30` | Mantenimientos programados próximos a vencer, o ya vencidos |
+| `GET/POST /agenda/` | Reuniones, visitas de obra, entregas. **Cualquier usuario logueado puede crear y coordinar** — es coordinación operativa, no dinero |
+| `GET /agenda/proximos?dias=7` | Vistazo rápido de los próximos eventos pendientes |
 
-Y, aparte de eso:
+Con esto se completan los 5 módulos de la ampliación acordada.
+
+## 12. Siguiente paso sugerido
+
+Con esto, las 5 fases del roadmap original **y** los 5 módulos de la
+ampliación (Finanzas y Facturación; Control operativo de proyectos;
+Gestión documental; Planillas; Logística/mantenimiento/agenda) ya están
+construidos y probados en el backend. Lo que queda:
+
+- **Interfaz visual** para los 5 módulos ampliados — el frontend
+  todavía solo cubre las 5 fases originales.
 - **Instalar PaperCut o YSoft** en tus PCs/impresoras (paso físico) y
   luego automatizar la carga de su reporte hacia `/impresiones/importar-csv`.
-- **Interfaz visual** para lo que se agregó en los Módulos 1 a 4 — el
-  frontend todavía solo cubre las 5 fases originales.
+- **Envío automático de reportes por correo** (diario/semanal/mensual) —
+  pendiente de decidir el servicio de email a usar.
