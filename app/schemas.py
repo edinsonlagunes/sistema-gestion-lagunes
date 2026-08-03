@@ -169,6 +169,7 @@ class Ingreso(IngresoCreate):
     model_config = ConfigDict(from_attributes=True)
     id: int
     fecha: datetime
+    venta_id: Optional[int] = None
 
 
 # ---------- Egreso ----------
@@ -695,6 +696,8 @@ class Asistencia(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
     colaborador_id: int
+    colaborador_nombre: Optional[str] = None
+    colaborador_rol: Optional[str] = None
     fecha: date
     hora_entrada: datetime
     hora_salida: Optional[datetime] = None

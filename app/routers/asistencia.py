@@ -18,6 +18,8 @@ def _a_schema(registro: models.Asistencia) -> schemas.Asistencia:
     return schemas.Asistencia(
         id=registro.id,
         colaborador_id=registro.colaborador_id,
+        colaborador_nombre=registro.colaborador.nombre if registro.colaborador else None,
+        colaborador_rol=registro.colaborador.rol if registro.colaborador else None,
         fecha=registro.fecha,
         hora_entrada=registro.hora_entrada,
         hora_salida=registro.hora_salida,
