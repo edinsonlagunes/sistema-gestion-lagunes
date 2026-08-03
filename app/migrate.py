@@ -205,11 +205,49 @@ def fix_fechas_ordenes():
         db.close()
 
 
+def fix_ventas_sin_vinculo():
+    """
+    Los ingresos de ventas creadas antes de que existiera la columna
+    venta_id quedaron sin ese vínculo — se identifican por su
+    descripción ("Venta #N") y se les asigna el id de esa venta, para
+    que el botón de quitar una venta mal registrada pueda encontrarlas.
+    Idempotente.
+    """
+    db = SessionLocal()
+    try:
+        pendientes = db.query(models.Ingreso).filter(models.Ingreso.venta_id.is_(None)).all()
+        vinculados = 0
+        for ingreso in pendientes:
+            if not ingreso.descripcion or not ingreso.descripcion.startswith("Venta #"):
+                continue
+            resto = ingreso.descripcion[len("Venta #"):]
+            numero = ""
+            for caracter in resto:
+                if caracter.isdigit():
+                    numero += caracter
+                else:
+                    break
+            if not numero:
+                continue
+            venta = db.query(models.Venta).get(int(numero))
+            if venta and venta.negocio_id == ingreso.negocio_id:
+                ingreso.venta_id = venta.id
+                vinculados += 1
+        if vinculados:
+            print(f"Se vinculó {vinculados} ingreso(s) de ventas antiguas con su venta_id.")
+        else:
+            print("No había ingresos de ventas antiguas por vincular.")
+        db.commit()
+    finally:
+        db.close()
+
+
 def migrar():
     migrar_columnas()
     fix_ingresos_proyecto()
     fix_egresos_proveedor()
     fix_fechas_ordenes()
+    fix_ventas_sin_vinculo()
     print("Migración completa.")
 
 
