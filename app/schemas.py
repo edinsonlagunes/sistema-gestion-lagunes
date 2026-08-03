@@ -829,6 +829,7 @@ class ConciliacionColaborador(BaseModel):
     total_ventas: float
     cantidad_ventas: int
     total_impresiones: float
+    total_impresiones_estimado: float = 0.0  # cruzando categoria/tamaño contra el catálogo, en soles
 
 
 class ConciliacionDiaria(BaseModel):

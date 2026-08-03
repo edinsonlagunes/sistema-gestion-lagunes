@@ -179,7 +179,8 @@ def conciliacion_diaria(
 
     for v in ventas:
         datos = acumulado.setdefault(
-            v.colaborador_id, {"total_ventas": 0.0, "cantidad_ventas": 0, "total_impresiones": 0.0}
+            v.colaborador_id,
+            {"total_ventas": 0.0, "cantidad_ventas": 0, "total_impresiones": 0.0, "total_impresiones_estimado": 0.0},
         )
         datos["total_ventas"] += v.total
         datos["cantidad_ventas"] += 1
@@ -188,9 +189,21 @@ def conciliacion_diaria(
         if r.colaborador_id is None:
             continue
         datos = acumulado.setdefault(
-            r.colaborador_id, {"total_ventas": 0.0, "cantidad_ventas": 0, "total_impresiones": 0.0}
+            r.colaborador_id,
+            {"total_ventas": 0.0, "cantidad_ventas": 0, "total_impresiones": 0.0, "total_impresiones_estimado": 0.0},
         )
         datos["total_impresiones"] += r.cantidad
+        servicio = (
+            db.query(models.Servicio)
+            .filter(
+                models.Servicio.negocio_id == r.negocio_id,
+                models.Servicio.categoria == r.tipo_trabajo,
+                models.Servicio.tamano == r.tamano,
+            )
+            .first()
+        )
+        if servicio:
+            datos["total_impresiones_estimado"] += servicio.precio_unitario * r.cantidad
 
     resultado = []
     for colaborador_id, datos in acumulado.items():
@@ -203,6 +216,7 @@ def conciliacion_diaria(
                 total_ventas=datos["total_ventas"],
                 cantidad_ventas=datos["cantidad_ventas"],
                 total_impresiones=datos["total_impresiones"],
+                total_impresiones_estimado=datos["total_impresiones_estimado"],
             )
         )
     resultado.sort(key=lambda r: r.total_ventas, reverse=True)
