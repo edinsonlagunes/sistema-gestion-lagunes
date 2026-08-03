@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app import models, schemas
-from app.auth import obtener_usuario_actual
+from app.auth import obtener_usuario_actual, requerir_admin
 from app.database import get_db
 
 router = APIRouter(prefix="/ventas", tags=["Ventas (POS)"], dependencies=[Depends(obtener_usuario_actual)])
@@ -87,9 +87,48 @@ def registrar_venta(data: schemas.VentaCreate, db: Session = Depends(get_db)):
             monto=total,
             medio_pago=data.medio_pago,
             descripcion=f"Venta #{venta.id}" + (f" - {data.cliente}" if data.cliente else ""),
+            venta_id=venta.id,
         )
     )
 
     db.commit()
     db.refresh(venta)
     return venta
+
+
+@router.delete("/{venta_id}", status_code=204)
+def eliminar_venta(
+    venta_id: int,
+    db: Session = Depends(get_db),
+    _admin: models.Usuario = Depends(requerir_admin),
+):
+    """
+    Quita una venta registrada por error: revierte el ingreso que había
+    generado y devuelve al stock cualquier insumo que se hubiera
+    descontado. Solo administradores.
+    """
+    venta = db.query(models.Venta).get(venta_id)
+    if not venta:
+        raise HTTPException(status_code=404, detail="Venta no encontrada")
+
+    for item in venta.items:
+        servicio = db.query(models.Servicio).get(item.servicio_id)
+        if servicio and servicio.insumo_id and servicio.consumo_insumo_por_unidad:
+            insumo = db.query(models.Insumo).get(servicio.insumo_id)
+            if insumo:
+                insumo.stock_actual += servicio.consumo_insumo_por_unidad * item.cantidad
+
+    # Ventas creadas antes de que existiera el vínculo venta_id no lo tienen
+    # guardado — como respaldo, se busca también por su descripción exacta.
+    db.query(models.Ingreso).filter(
+        (models.Ingreso.venta_id == venta.id)
+        | (
+            (models.Ingreso.venta_id.is_(None))
+            & (models.Ingreso.negocio_id == venta.negocio_id)
+            & (models.Ingreso.descripcion.like(f"Venta #{venta.id} -%") | (models.Ingreso.descripcion == f"Venta #{venta.id}"))
+        )
+    ).delete(synchronize_session=False)
+
+    db.delete(venta)
+    db.commit()
+    return None

@@ -83,6 +83,20 @@ def migrar_columnas():
         else:
             print("colaboradores.hora_entrada_esperada ya existe — nada que hacer.")
 
+        if not _tiene_columna(inspector, "ingresos", "venta_id"):
+            print("Agregando columna venta_id a ingresos...")
+            conn.execute(text("ALTER TABLE ingresos ADD COLUMN venta_id INTEGER"))
+            conn.commit()
+        else:
+            print("ingresos.venta_id ya existe — nada que hacer.")
+
+        if not _tiene_columna(inspector, "ordenes_servicio", "fecha"):
+            print("Agregando columna fecha a ordenes_servicio...")
+            conn.execute(text("ALTER TABLE ordenes_servicio ADD COLUMN fecha TIMESTAMP"))
+            conn.commit()
+        else:
+            print("ordenes_servicio.fecha ya existe — nada que hacer.")
+
 
 def fix_ingresos_proyecto():
     """
@@ -168,10 +182,34 @@ def fix_egresos_proveedor():
         db.close()
 
 
+def fix_fechas_ordenes():
+    """
+    Las órdenes de servicio creadas antes de que existiera la columna
+    fecha quedan con fecha=NULL — se les asigna la fecha de inicio de
+    su proyecto como mejor aproximación disponible, para que puedan
+    aparecer en los reportes por periodo. Idempotente.
+    """
+    db = SessionLocal()
+    try:
+        ordenes_sin_fecha = db.query(models.OrdenServicio).filter(models.OrdenServicio.fecha.is_(None)).all()
+        for orden in ordenes_sin_fecha:
+            proyecto = db.query(models.Proyecto).get(orden.proyecto_id)
+            if proyecto:
+                orden.fecha = proyecto.fecha_inicio
+        if ordenes_sin_fecha:
+            print(f"Se completó la fecha de {len(ordenes_sin_fecha)} orden(es) de servicio antigua(s).")
+        else:
+            print("No había órdenes de servicio sin fecha.")
+        db.commit()
+    finally:
+        db.close()
+
+
 def migrar():
     migrar_columnas()
     fix_ingresos_proyecto()
     fix_egresos_proveedor()
+    fix_fechas_ordenes()
     print("Migración completa.")
 
 

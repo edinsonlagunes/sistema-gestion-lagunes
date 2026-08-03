@@ -217,7 +217,7 @@ def conciliacion_diaria(
 
 @router.get("/reporte", response_model=schemas.ReporteBalance)
 def reporte_balance(
-    periodo: str = Query(..., pattern="^(diario|semanal|mensual)$"),
+    periodo: str = Query(..., pattern="^(diario|semanal|mensual|anual)$"),
     fecha: date | None = None,
     negocio_id: int | None = None,
     db: Session = Depends(get_db),
@@ -225,8 +225,8 @@ def reporte_balance(
 ):
     """
     Balance de ingresos/egresos para un periodo completo: el día, la
-    semana (lunes a domingo) o el mes que contiene la fecha dada (o la
-    de hoy, si no se especifica). Solo administradores.
+    semana (lunes a domingo), el mes, o el año que contiene la fecha
+    dada (o la de hoy, si no se especifica). Solo administradores.
     """
     referencia = fecha or ahora_peru().date()
 
@@ -235,10 +235,13 @@ def reporte_balance(
     elif periodo == "semanal":
         desde = referencia - timedelta(days=referencia.weekday())
         hasta = desde + timedelta(days=6)
-    else:
+    elif periodo == "mensual":
         desde = referencia.replace(day=1)
         ultimo_dia = calendar.monthrange(referencia.year, referencia.month)[1]
         hasta = referencia.replace(day=ultimo_dia)
+    else:  # anual
+        desde = referencia.replace(month=1, day=1)
+        hasta = referencia.replace(month=12, day=31)
 
     inicio_dt = datetime.combine(desde, time.min)
     fin_dt = datetime.combine(hasta, time.max)
@@ -263,3 +266,125 @@ def reporte_balance(
         balance=total_ingresos - total_egresos,
         cantidad_movimientos=len(ingresos) + len(egresos),
     )
+
+
+def _clave_periodo(fecha, agrupacion: str):
+    d = fecha.date() if hasattr(fecha, "date") else fecha
+    if agrupacion == "dia":
+        return d.isoformat(), d, d
+    if agrupacion == "semana":
+        inicio = d - timedelta(days=d.weekday())
+        fin = inicio + timedelta(days=6)
+        iso_year, iso_week, _ = d.isocalendar()
+        return f"{iso_year}-S{iso_week:02d}", inicio, fin
+    if agrupacion == "mes":
+        inicio = d.replace(day=1)
+        fin = d.replace(day=calendar.monthrange(d.year, d.month)[1])
+        return f"{d.year}-{d.month:02d}", inicio, fin
+    # anio
+    return str(d.year), date(d.year, 1, 1), date(d.year, 12, 31)
+
+
+@router.get("/serie", response_model=list[schemas.PuntoSerieFinanciera])
+def serie_financiera(
+    agrupacion: str = Query(..., pattern="^(dia|semana|mes|anio)$"),
+    negocio_id: int | None = None,
+    desde: date | None = None,
+    hasta: date | None = None,
+    db: Session = Depends(get_db),
+    _admin: models.Usuario = Depends(requerir_admin),
+):
+    """
+    Ingresos, egresos, ventas del POS, y facturación/cobros de proyectos
+    de la Constructora, agrupados por día, semana, mes o año — para
+    tener el control de ingresos y egresos de toda la empresa a lo
+    largo del tiempo, no solo de un periodo puntual. Solo administradores.
+    """
+    hoy = ahora_peru().date()
+    if hasta is None:
+        hasta = hoy
+    if desde is None:
+        if agrupacion == "dia":
+            desde = hasta - timedelta(days=29)
+        elif agrupacion == "semana":
+            desde = hasta - timedelta(weeks=11)
+        elif agrupacion == "mes":
+            referencia = hasta.replace(day=1)
+            for _ in range(11):
+                referencia = (referencia - timedelta(days=1)).replace(day=1)
+            desde = referencia
+        else:  # anio
+            desde = hasta.replace(year=hasta.year - 4, month=1, day=1)
+
+    inicio_dt = datetime.combine(desde, time.min)
+    fin_dt = datetime.combine(hasta, time.max)
+
+    query_ingresos = db.query(models.Ingreso).filter(models.Ingreso.fecha >= inicio_dt, models.Ingreso.fecha <= fin_dt)
+    query_egresos = db.query(models.Egreso).filter(models.Egreso.fecha >= inicio_dt, models.Egreso.fecha <= fin_dt)
+    query_ventas = db.query(models.Venta).filter(models.Venta.fecha >= inicio_dt, models.Venta.fecha <= fin_dt)
+    query_ordenes = (
+        db.query(models.OrdenServicio)
+        .join(models.Proyecto)
+        .filter(models.OrdenServicio.fecha >= inicio_dt, models.OrdenServicio.fecha <= fin_dt)
+    )
+    query_pagos = (
+        db.query(models.PagoProyecto)
+        .join(models.Proyecto)
+        .filter(models.PagoProyecto.fecha_pago >= inicio_dt, models.PagoProyecto.fecha_pago <= fin_dt)
+    )
+    if negocio_id is not None:
+        query_ingresos = query_ingresos.filter(models.Ingreso.negocio_id == negocio_id)
+        query_egresos = query_egresos.filter(models.Egreso.negocio_id == negocio_id)
+        query_ventas = query_ventas.filter(models.Venta.negocio_id == negocio_id)
+        query_ordenes = query_ordenes.filter(models.Proyecto.negocio_id == negocio_id)
+        query_pagos = query_pagos.filter(models.Proyecto.negocio_id == negocio_id)
+
+    buckets: dict[str, dict] = {}
+
+    def bucket(fecha):
+        clave, f_inicio, f_fin = _clave_periodo(fecha, agrupacion)
+        if clave not in buckets:
+            buckets[clave] = {
+                "etiqueta": clave,
+                "fecha_inicio": f_inicio,
+                "fecha_fin": f_fin,
+                "total_ingresos": 0.0,
+                "total_egresos": 0.0,
+                "ventas_cantidad": 0,
+                "ventas_total": 0.0,
+                "proyectos_facturado": 0.0,
+                "proyectos_cobrado": 0.0,
+            }
+        return buckets[clave]
+
+    for i in query_ingresos.all():
+        bucket(i.fecha)["total_ingresos"] += i.monto
+    for e in query_egresos.all():
+        bucket(e.fecha)["total_egresos"] += e.monto
+    for v in query_ventas.all():
+        b = bucket(v.fecha)
+        b["ventas_cantidad"] += 1
+        b["ventas_total"] += v.total
+    for o in query_ordenes.all():
+        if o.fecha:
+            bucket(o.fecha)["proyectos_facturado"] += o.subtotal
+    for p in query_pagos.all():
+        bucket(p.fecha_pago)["proyectos_cobrado"] += p.monto
+
+    resultado = [
+        schemas.PuntoSerieFinanciera(
+            etiqueta=b["etiqueta"],
+            fecha_inicio=b["fecha_inicio"],
+            fecha_fin=b["fecha_fin"],
+            total_ingresos=round(b["total_ingresos"], 2),
+            total_egresos=round(b["total_egresos"], 2),
+            balance=round(b["total_ingresos"] - b["total_egresos"], 2),
+            ventas_cantidad=b["ventas_cantidad"],
+            ventas_total=round(b["ventas_total"], 2),
+            proyectos_facturado=round(b["proyectos_facturado"], 2),
+            proyectos_cobrado=round(b["proyectos_cobrado"], 2),
+        )
+        for b in buckets.values()
+    ]
+    resultado.sort(key=lambda r: r.fecha_inicio)
+    return resultado

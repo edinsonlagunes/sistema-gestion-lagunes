@@ -32,6 +32,7 @@ def _a_detalle(proyecto: models.Proyecto) -> schemas.ProyectoDetalle:
         pagos=proyecto.pagos,
         contratos=proyecto.contratos,
         registros_tiempo=proyecto.registros_tiempo,
+        ampliaciones=proyecto.ampliaciones,
         total_facturado=total_facturado,
         total_pagado=total_pagado,
         saldo_pendiente=total_facturado - total_pagado,
@@ -444,6 +445,65 @@ def eliminar_contrato(
         raise HTTPException(status_code=404, detail="Contrato no encontrado")
 
     db.delete(contrato)
+    db.commit()
+    proyecto = db.query(models.Proyecto).get(proyecto_id)
+    return _a_detalle(proyecto)
+
+
+# ---------- Ampliaciones de plazo ----------
+
+@router.post("/{proyecto_id}/ampliaciones", response_model=schemas.ProyectoDetalle)
+def registrar_ampliacion(
+    proyecto_id: int,
+    data: schemas.AmpliacionPlazoCreate,
+    db: Session = Depends(get_db),
+    _admin: models.Usuario = Depends(requerir_admin),
+):
+    """
+    Registra una ampliación (extensión) del plazo de entrega: guarda la
+    fecha anterior y el motivo, y actualiza la fecha de entrega estimada
+    del proyecto a la nueva. Así queda el historial completo de cada vez
+    que se extendió, no solo la fecha vigente. Solo administradores.
+    """
+    proyecto = db.query(models.Proyecto).get(proyecto_id)
+    if not proyecto:
+        raise HTTPException(status_code=404, detail="Proyecto no encontrado")
+
+    ampliacion = models.AmpliacionPlazo(
+        proyecto_id=proyecto_id,
+        fecha_entrega_anterior=proyecto.fecha_entrega_estimada,
+        fecha_entrega_nueva=data.fecha_entrega_nueva,
+        motivo=data.motivo,
+    )
+    db.add(ampliacion)
+    proyecto.fecha_entrega_estimada = data.fecha_entrega_nueva
+
+    db.commit()
+    db.refresh(proyecto)
+    return _a_detalle(proyecto)
+
+
+@router.delete("/{proyecto_id}/ampliaciones/{ampliacion_id}", response_model=schemas.ProyectoDetalle)
+def eliminar_ampliacion(
+    proyecto_id: int,
+    ampliacion_id: int,
+    db: Session = Depends(get_db),
+    _admin: models.Usuario = Depends(requerir_admin),
+):
+    """
+    Quita un registro de ampliación mal anotado. No recalcula la fecha
+    de entrega vigente del proyecto (si hace falta corregirla, edítala
+    directo con PATCH /proyectos/{id}). Solo administradores.
+    """
+    ampliacion = (
+        db.query(models.AmpliacionPlazo)
+        .filter(models.AmpliacionPlazo.id == ampliacion_id, models.AmpliacionPlazo.proyecto_id == proyecto_id)
+        .first()
+    )
+    if not ampliacion:
+        raise HTTPException(status_code=404, detail="Ampliación no encontrada")
+
+    db.delete(ampliacion)
     db.commit()
     proyecto = db.query(models.Proyecto).get(proyecto_id)
     return _a_detalle(proyecto)

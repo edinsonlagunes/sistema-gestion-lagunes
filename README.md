@@ -55,6 +55,7 @@ siguiente fase junto con el login por token).
 | `POST /caja/abrir` | Abre caja con un monto inicial |
 | `POST /caja/{id}/cerrar` | Cierra caja con arqueo: compara lo esperado (apertura + ventas en efectivo) contra lo contado físicamente |
 | `GET/POST /ventas/` | Registra una venta con uno o más ítems. En una sola operación: calcula el total, genera el ingreso en finanzas, y descuenta el insumo vinculado a cada servicio |
+| `DELETE /ventas/{id}` | Quita una venta registrada por error: revierte el ingreso y devuelve el insumo consumido al stock — **solo administradores** |
 
 **Reglas de negocio ya probadas**: no se puede vender sin caja abierta, y
 una vez cerrada la caja no se pueden registrar más ventas hasta abrir una
@@ -140,7 +141,8 @@ para automatizar la carga.
 | `POST/DELETE /puestos-trabajo/{id}/equipos` | Agregar o quitar computadoras/fotocopiadoras/impresoras/plotters de un puesto — **solo administradores** |
 | `GET /finanzas/movimientos-dia?fecha=&negocio_id=` | Todo el movimiento de caja de un día — cada ingreso y egreso, uno por uno, con el balance — **solo administradores** |
 | `GET /finanzas/conciliacion-diaria?fecha=&negocio_id=` | El día agrupado por colaborador (y su puesto/equipos): cuánto vendió, cuántas ventas, cuántas impresiones. Pensado para que el encargado de caja haga el cuadre — accesible a cualquier usuario logueado |
-| `GET /finanzas/reporte?periodo=diario\|semanal\|mensual&fecha=&negocio_id=` | Balance del periodo completo (el día, la semana lunes-domingo, o el mes) — **solo administradores** |
+| `GET /finanzas/reporte?periodo=diario\|semanal\|mensual\|anual&fecha=&negocio_id=` | Balance del periodo completo (el día, la semana lunes-domingo, el mes, o el año) — **solo administradores** |
+| `GET /finanzas/serie?agrupacion=dia\|semana\|mes\|anio&negocio_id=&desde=&hasta=` | Ingresos, egresos, ventas del POS, y facturación/cobros de proyectos, agrupados por periodo — control de ingresos y egresos de toda la empresa a lo largo del tiempo — **solo administradores** |
 
 **Nota**: el envío automático de estos reportes por correo (diario/semanal/mensual)
 no está construido todavía — requiere conectar un servicio de email
@@ -303,6 +305,9 @@ viejo que se haya generado con la lógica anterior.
 | `PATCH/DELETE /proyectos/{id}/contratos/{id}` | Editar o quitar un contrato — **solo administradores** |
 | `POST/GET /proyectos/{id}/tiempos` | Horas dedicadas por un colaborador al proyecto, con fecha y descripción — **cualquier usuario logueado puede registrar su propio tiempo** |
 | `DELETE /proyectos/{id}/tiempos/{id}` | Quitar un registro de tiempo mal anotado — **solo administradores** (para no alterar el historial sin control) |
+| `fecha_inicio`, `fecha_entrega_estimada` en `/proyectos/` | Ya existían; ahora `fecha_inicio` también se puede editar después de crear el proyecto vía `PATCH /proyectos/{id}` |
+| `POST /proyectos/{id}/ampliaciones` | Registra una extensión del plazo de entrega: guarda la fecha anterior y el motivo, y actualiza `fecha_entrega_estimada` — conserva el historial completo, no solo la fecha vigente — **solo administradores** |
+| `DELETE /proyectos/{id}/ampliaciones/{id}` | Quita un registro de ampliación mal anotado (no recalcula la fecha vigente) — **solo administradores** |
 
 ## 9. Módulo ampliado — Gestión documental con vencimientos (agregado)
 

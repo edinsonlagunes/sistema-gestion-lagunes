@@ -333,6 +333,7 @@ class ProyectoUpdate(BaseModel):
     nombre: Optional[str] = None
     tipo_proyecto: Optional[str] = None
     cliente_id: Optional[int] = None
+    fecha_inicio: Optional[datetime] = None
     fecha_entrega_estimada: Optional[datetime] = None
     presupuesto: Optional[float] = None
 
@@ -456,11 +457,27 @@ class RegistroTiempoOut(BaseModel):
     descripcion: Optional[str] = None
 
 
+class AmpliacionPlazoCreate(BaseModel):
+    fecha_entrega_nueva: datetime
+    motivo: Optional[str] = None
+
+
+class AmpliacionPlazoOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    proyecto_id: int
+    fecha_entrega_anterior: Optional[datetime] = None
+    fecha_entrega_nueva: datetime
+    motivo: Optional[str] = None
+    fecha_registro: datetime
+
+
 class ProyectoDetalle(Proyecto):
     ordenes: list[OrdenServicioOut]
     pagos: list[PagoProyectoOut]
     contratos: list[ContratoOut]
     registros_tiempo: list[RegistroTiempoOut]
+    ampliaciones: list[AmpliacionPlazoOut]
     total_facturado: float
     total_pagado: float
     saldo_pendiente: float
@@ -813,10 +830,23 @@ class ConciliacionDiaria(BaseModel):
 
 
 class ReporteBalance(BaseModel):
-    periodo: str  # diario, semanal, mensual
+    periodo: str  # diario, semanal, mensual, anual
     fecha_desde: date
     fecha_hasta: date
     total_ingresos: float
     total_egresos: float
     balance: float
     cantidad_movimientos: int
+
+
+class PuntoSerieFinanciera(BaseModel):
+    etiqueta: str  # "2026-08-02", "2026-S31", "2026-08", "2026"
+    fecha_inicio: date
+    fecha_fin: date
+    total_ingresos: float
+    total_egresos: float
+    balance: float
+    ventas_cantidad: int
+    ventas_total: float
+    proyectos_facturado: float
+    proyectos_cobrado: float

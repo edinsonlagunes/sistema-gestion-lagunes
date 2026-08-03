@@ -173,6 +173,7 @@ class Ingreso(Base):
     fecha = Column(DateTime, default=ahora_peru)
     orden_servicio_id = Column(Integer, ForeignKey("ordenes_servicio.id"), nullable=True)  # ya no se usa para crear ingresos nuevos, se deja por compatibilidad
     pago_proyecto_id = Column(Integer, ForeignKey("pagos_proyecto.id"), nullable=True)
+    venta_id = Column(Integer, ForeignKey("ventas.id"), nullable=True)
 
     negocio = relationship("Negocio", back_populates="ingresos")
 
@@ -358,6 +359,27 @@ class Proyecto(Base):
     )
     contratos = relationship("Contrato", back_populates="proyecto", cascade="all, delete-orphan")
     registros_tiempo = relationship("RegistroTiempo", back_populates="proyecto", cascade="all, delete-orphan")
+    ampliaciones = relationship(
+        "AmpliacionPlazo", back_populates="proyecto", cascade="all, delete-orphan", order_by="AmpliacionPlazo.fecha_registro"
+    )
+
+
+class AmpliacionPlazo(Base):
+    """
+    Registro de una ampliación (extensión) del plazo de entrega de un
+    proyecto — conserva la fecha anterior y el motivo, para tener el
+    historial de cada vez que se extendió, no solo la fecha actual.
+    """
+    __tablename__ = "ampliaciones_plazo"
+
+    id = Column(Integer, primary_key=True, index=True)
+    proyecto_id = Column(Integer, ForeignKey("proyectos.id"), nullable=False)
+    fecha_entrega_anterior = Column(DateTime, nullable=True)
+    fecha_entrega_nueva = Column(DateTime, nullable=False)
+    motivo = Column(String, nullable=True)
+    fecha_registro = Column(DateTime, default=ahora_peru)
+
+    proyecto = relationship("Proyecto", back_populates="ampliaciones")
 
 
 class Contrato(Base):
@@ -408,6 +430,7 @@ class OrdenServicio(Base):
     cantidad = Column(Float, nullable=False)
     precio_unitario = Column(Float, nullable=False)
     subtotal = Column(Float, nullable=False)
+    fecha = Column(DateTime, default=ahora_peru)
     estado = Column(String, nullable=False, default="entregado")  # pendiente, entregado
     fecha = Column(DateTime, default=ahora_peru)
 
