@@ -275,6 +275,24 @@ def renombrar_negocio_constructora():
         db.close()
 
 
+def renombrar_negocio_libreria():
+    """
+    Cambia el nombre del negocio "Librería" a "Imprenta", si todavía no
+    se ha hecho. Idempotente — si ya se renombró, no hace nada.
+    """
+    db = SessionLocal()
+    try:
+        negocio = db.query(models.Negocio).filter(models.Negocio.nombre == "Librería").first()
+        if negocio:
+            negocio.nombre = "Imprenta"
+            db.commit()
+            print("Se renombró 'Librería' a 'Imprenta'.")
+        else:
+            print("El negocio 'Librería' ya no existe con ese nombre — nada que renombrar.")
+    finally:
+        db.close()
+
+
 def migrar():
     migrar_columnas()
     fix_ingresos_proyecto()
@@ -282,6 +300,7 @@ def migrar():
     fix_fechas_ordenes()
     fix_ventas_sin_vinculo()
     renombrar_negocio_constructora()
+    renombrar_negocio_libreria()
     print("Migración completa.")
 
 
