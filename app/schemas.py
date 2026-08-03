@@ -26,6 +26,8 @@ class ColaboradorBase(BaseModel):
     activo: bool = True
     sueldo_semanal: Optional[float] = None
     hora_entrada_esperada: Optional[str] = None  # "HH:MM"
+    cargo: Optional[str] = None
+    profesion: Optional[str] = None
 
 
 class ColaboradorCreate(ColaboradorBase):
@@ -38,6 +40,8 @@ class ColaboradorUpdate(BaseModel):
     activo: Optional[bool] = None
     sueldo_semanal: Optional[float] = None
     hora_entrada_esperada: Optional[str] = None
+    cargo: Optional[str] = None
+    profesion: Optional[str] = None
 
 
 class Colaborador(ColaboradorBase):

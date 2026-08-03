@@ -97,6 +97,20 @@ def migrar_columnas():
         else:
             print("ordenes_servicio.fecha ya existe — nada que hacer.")
 
+        if not _tiene_columna(inspector, "colaboradores", "cargo"):
+            print("Agregando columna cargo a colaboradores...")
+            conn.execute(text("ALTER TABLE colaboradores ADD COLUMN cargo VARCHAR"))
+            conn.commit()
+        else:
+            print("colaboradores.cargo ya existe — nada que hacer.")
+
+        if not _tiene_columna(inspector, "colaboradores", "profesion"):
+            print("Agregando columna profesion a colaboradores...")
+            conn.execute(text("ALTER TABLE colaboradores ADD COLUMN profesion VARCHAR"))
+            conn.commit()
+        else:
+            print("colaboradores.profesion ya existe — nada que hacer.")
+
 
 def fix_ingresos_proyecto():
     """
@@ -242,12 +256,32 @@ def fix_ventas_sin_vinculo():
         db.close()
 
 
+def renombrar_negocio_constructora():
+    """
+    Cambia el nombre del negocio "Constructora Lagunes" a "Estudio de
+    Arquitectura e Ingeniería", si todavía no se ha hecho. Idempotente
+    — si ya se renombró, no hace nada.
+    """
+    db = SessionLocal()
+    try:
+        negocio = db.query(models.Negocio).filter(models.Negocio.nombre == "Constructora Lagunes").first()
+        if negocio:
+            negocio.nombre = "Estudio de Arquitectura e Ingeniería"
+            db.commit()
+            print("Se renombró 'Constructora Lagunes' a 'Estudio de Arquitectura e Ingeniería'.")
+        else:
+            print("El negocio 'Constructora Lagunes' ya no existe con ese nombre — nada que renombrar.")
+    finally:
+        db.close()
+
+
 def migrar():
     migrar_columnas()
     fix_ingresos_proyecto()
     fix_egresos_proveedor()
     fix_fechas_ordenes()
     fix_ventas_sin_vinculo()
+    renombrar_negocio_constructora()
     print("Migración completa.")
 
 

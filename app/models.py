@@ -105,6 +105,8 @@ class Colaborador(Base):
     creado_en = Column(DateTime, default=ahora_peru)
     sueldo_semanal = Column(Float, nullable=True)
     hora_entrada_esperada = Column(String, nullable=True)  # "HH:MM", para calcular tardanzas
+    cargo = Column(String, nullable=True)  # puesto dentro de la empresa, ej. "Jefe de Obra"
+    profesion = Column(String, nullable=True)  # ej. "Arquitecto", "Ingeniero Civil"
 
     negocio = relationship("Negocio", back_populates="colaboradores")
     usuario = relationship("Usuario", back_populates="colaborador", uselist=False)
