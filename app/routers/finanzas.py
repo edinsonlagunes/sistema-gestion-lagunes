@@ -111,6 +111,7 @@ def movimientos_dia(
             medio_pago=i.medio_pago,
             descripcion=i.descripcion,
             fecha=i.fecha,
+            venta_id=i.venta_id,
         )
         for i in ingresos
     ] + [

@@ -804,6 +804,7 @@ class MovimientoFinanciero(BaseModel):
     categoria: Optional[str] = None  # solo en egresos
     descripcion: Optional[str] = None
     fecha: datetime
+    venta_id: Optional[int] = None  # si el ingreso viene de una venta del POS, para poder corregirla ahí mismo
 
 
 class MovimientosDiaResumen(BaseModel):

@@ -1,4 +1,4 @@
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -87,13 +87,25 @@ def en_turno(negocio_id: int | None = None, db: Session = Depends(get_db)):
 @router.get("/", response_model=list[schemas.Asistencia])
 def listar_asistencia(
     colaborador_id: int | None = None,
+    negocio_id: int | None = None,
     fecha: date | None = None,
+    dias: int | None = None,
     db: Session = Depends(get_db),
 ):
+    """
+    Historial de entradas/salidas. `dias` (ej. 14) limita a los últimos
+    N días sin tener que pedir una fecha exacta — útil para ver el
+    horario reciente de todo un negocio de un vistazo.
+    """
     query = db.query(models.Asistencia)
     if colaborador_id is not None:
         query = query.filter(models.Asistencia.colaborador_id == colaborador_id)
+    if negocio_id is not None:
+        query = query.join(models.Colaborador).filter(models.Colaborador.negocio_id == negocio_id)
     if fecha is not None:
         query = query.filter(models.Asistencia.fecha == fecha)
+    if dias is not None:
+        desde = ahora_peru().date() - timedelta(days=dias)
+        query = query.filter(models.Asistencia.fecha >= desde)
     registros = query.order_by(models.Asistencia.hora_entrada.desc()).all()
     return [_a_schema(r) for r in registros]

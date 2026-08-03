@@ -97,7 +97,7 @@ monto efectivamente cobrado — así el Dashboard nunca muestra como
 | `POST /asistencia/entrada` | Marca entrada de un colaborador (bloquea una segunda entrada sin salida previa) |
 | `POST /asistencia/salida` | Marca salida y calcula automáticamente las horas trabajadas |
 | `GET /asistencia/en-turno?negocio_id=` | Quién está trabajando ahora mismo — útil como vista rápida de "quién está en la tienda/oficina" |
-| `GET /asistencia/?colaborador_id=&fecha=` | Historial de asistencia, filtrable por colaborador o fecha |
+| `GET /asistencia/?colaborador_id=&negocio_id=&fecha=&dias=` | Historial de entradas/salidas — `dias` (ej. 14) trae solo lo reciente sin pedir una fecha exacta; `negocio_id` filtra a todo el negocio de un vistazo |
 
 Lo que falta a propósito para más adelante (ya está en el roadmap):
 integración con PaperCut/YSoft para el conteo de impresiones (Fase 5, la
