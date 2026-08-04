@@ -43,6 +43,8 @@ siguiente fase junto con el login por token).
 | `GET/POST /finanzas/egresos` | Registrar egresos |
 | `GET /finanzas/resumen` | Balance por negocio + alerta de insumos bajos — la base del futuro dashboard |
 | `GET/POST /insumos/` | Inventario por negocio |
+| `PATCH /insumos/{id}` | Editar un insumo, incluye corregir el stock a mano tras un conteo físico — **solo administradores** |
+| `DELETE /insumos/{id}` | Quitar un insumo del catálogo (bloqueado si tiene compras registradas) — **solo administradores** |
 | `GET/POST /proveedores/` | Proveedores |
 | `GET/POST /compras/` | Registrar compra: **sube el stock y genera el egreso automáticamente** |
 

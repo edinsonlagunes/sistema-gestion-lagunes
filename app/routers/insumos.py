@@ -34,6 +34,44 @@ def crear_insumo(data: schemas.InsumoCreate, db: Session = Depends(get_db)):
     return insumo
 
 
+@router.patch("/{insumo_id}", response_model=schemas.Insumo)
+def editar_insumo(
+    insumo_id: int,
+    data: schemas.InsumoUpdate,
+    db: Session = Depends(get_db),
+    _admin: models.Usuario = Depends(requerir_admin),
+):
+    """Edita un insumo — incluye corregir el stock a mano tras un conteo físico. Solo administradores."""
+    insumo = db.query(models.Insumo).get(insumo_id)
+    if not insumo:
+        raise HTTPException(status_code=404, detail="Insumo no encontrado")
+    for campo, valor in data.model_dump(exclude_unset=True).items():
+        setattr(insumo, campo, valor)
+    db.commit()
+    db.refresh(insumo)
+    return insumo
+
+
+@router.delete("/{insumo_id}", status_code=204)
+def eliminar_insumo(
+    insumo_id: int,
+    db: Session = Depends(get_db),
+    _admin: models.Usuario = Depends(requerir_admin),
+):
+    """Quita un insumo del catálogo. Bloqueado si tiene compras registradas. Solo administradores."""
+    insumo = db.query(models.Insumo).get(insumo_id)
+    if not insumo:
+        raise HTTPException(status_code=404, detail="Insumo no encontrado")
+    if insumo.compras:
+        raise HTTPException(
+            status_code=400,
+            detail="Este insumo tiene compras registradas y no se puede eliminar.",
+        )
+    db.delete(insumo)
+    db.commit()
+    return None
+
+
 @proveedores_router.get("/", response_model=list[schemas.Proveedor])
 def listar_proveedores(db: Session = Depends(get_db)):
     return db.query(models.Proveedor).all()

@@ -163,12 +163,19 @@ class InsumoCreate(InsumoBase):
     pass
 
 
+class InsumoUpdate(BaseModel):
+    nombre: Optional[str] = None
+    unidad: Optional[str] = None
+    stock_actual: Optional[float] = None
+    stock_minimo: Optional[float] = None
+
+
 class Insumo(InsumoBase):
     model_config = ConfigDict(from_attributes=True)
     id: int
 
 
-# ---------- Compra (descuenta stock, genera egreso) ----------
+# ---------- Compra (sube stock; el egreso se genera al pagar al proveedor, no aquí) ----------
 class CompraCreate(BaseModel):
     negocio_id: int
     proveedor_id: int
