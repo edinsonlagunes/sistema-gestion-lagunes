@@ -1,4 +1,7 @@
+import io
+
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from app import models, schemas
@@ -43,6 +46,131 @@ def crear_proveedor(data: schemas.ProveedorCreate, db: Session = Depends(get_db)
     db.commit()
     db.refresh(proveedor)
     return proveedor
+
+
+@proveedores_router.patch("/{proveedor_id}", response_model=schemas.Proveedor)
+def editar_proveedor(
+    proveedor_id: int,
+    data: schemas.ProveedorUpdate,
+    db: Session = Depends(get_db),
+    _admin: models.Usuario = Depends(requerir_admin),
+):
+    """Edita los datos de un proveedor. Solo administradores."""
+    proveedor = db.query(models.Proveedor).get(proveedor_id)
+    if not proveedor:
+        raise HTTPException(status_code=404, detail="Proveedor no encontrado")
+    for campo, valor in data.model_dump(exclude_unset=True).items():
+        setattr(proveedor, campo, valor)
+    db.commit()
+    db.refresh(proveedor)
+    return proveedor
+
+
+@proveedores_router.delete("/{proveedor_id}", status_code=204)
+def eliminar_proveedor(
+    proveedor_id: int,
+    db: Session = Depends(get_db),
+    _admin: models.Usuario = Depends(requerir_admin),
+):
+    """
+    Quita un proveedor del catálogo. Bloqueado si tiene compras o pagos
+    registrados — esos son historial financiero real y no se pueden
+    perder solo porque se quiere quitar el proveedor de la lista.
+    Solo administradores.
+    """
+    proveedor = db.query(models.Proveedor).get(proveedor_id)
+    if not proveedor:
+        raise HTTPException(status_code=404, detail="Proveedor no encontrado")
+    if proveedor.compras or proveedor.pagos:
+        raise HTTPException(
+            status_code=400,
+            detail="Este proveedor tiene compras o pagos registrados y no se puede eliminar. "
+            "Si ya no trabajas con él, puedes dejarlo en la lista sin usarlo.",
+        )
+    db.delete(proveedor)
+    db.commit()
+    return None
+
+
+@proveedores_router.post("/importar", response_model=schemas.ProveedorImportarResultado)
+def importar_proveedores(
+    items: list[schemas.ProveedorImportarItem],
+    db: Session = Depends(get_db),
+    _admin: models.Usuario = Depends(requerir_admin),
+):
+    """
+    Crea proveedores en bloque (desde un Excel/CSV ya parseado en el
+    frontend). Omite los que coincidan por nombre exacto con uno que ya
+    existe, para no duplicar. Solo administradores.
+    """
+    existentes = {p.nombre.strip().lower() for p in db.query(models.Proveedor).all()}
+    creados = []
+    omitidos = 0
+    for item in items:
+        nombre_limpio = item.nombre.strip()
+        if not nombre_limpio or nombre_limpio.lower() in existentes:
+            omitidos += 1
+            continue
+        proveedor = models.Proveedor(
+            nombre=nombre_limpio,
+            contacto=item.contacto or None,
+            telefono=item.telefono or None,
+            direccion=item.direccion or None,
+        )
+        db.add(proveedor)
+        existentes.add(nombre_limpio.lower())
+        creados.append(proveedor)
+    db.commit()
+    for p in creados:
+        db.refresh(p)
+    return schemas.ProveedorImportarResultado(creados=len(creados), omitidos=omitidos, proveedores=creados)
+
+
+@proveedores_router.get("/exportar-word")
+def exportar_proveedores_word(db: Session = Depends(get_db)):
+    """
+    Genera un documento Word con la lista de proveedores (nombre,
+    teléfono, dirección, contacto) — para imprimir o compartir fuera
+    del sistema. El Excel y el PDF se generan directo en el navegador;
+    este es el único que necesita armarse en el servidor.
+    """
+    from docx import Document
+    from docx.shared import Pt
+
+    proveedores = db.query(models.Proveedor).order_by(models.Proveedor.nombre).all()
+
+    documento = Document()
+    documento.add_heading("Proveedores", level=1)
+    documento.add_paragraph(f"Generado el {ahora_peru().strftime('%d/%m/%Y %H:%M')}")
+
+    tabla = documento.add_table(rows=1, cols=4)
+    tabla.style = "Light Grid Accent 1"
+    encabezados = tabla.rows[0].cells
+    for celda, texto in zip(encabezados, ["Nombre", "Teléfono", "Dirección", "Contacto"]):
+        celda.text = texto
+        celda.paragraphs[0].runs[0].font.bold = True
+
+    for p in proveedores:
+        fila = tabla.add_row().cells
+        fila[0].text = p.nombre or ""
+        fila[1].text = p.telefono or ""
+        fila[2].text = p.direccion or ""
+        fila[3].text = p.contacto or ""
+
+    for fila in tabla.rows:
+        for celda in fila.cells:
+            for parrafo in celda.paragraphs:
+                for run in parrafo.runs:
+                    run.font.size = Pt(10)
+
+    buffer = io.BytesIO()
+    documento.save(buffer)
+    buffer.seek(0)
+    return StreamingResponse(
+        buffer,
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        headers={"Content-Disposition": "attachment; filename=proveedores.docx"},
+    )
 
 
 def _totales_proveedor(proveedor: models.Proveedor, negocio_id: int | None = None) -> tuple[float, float]:

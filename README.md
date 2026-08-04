@@ -284,6 +284,7 @@ financiero que faltaba: cuentas por pagar a proveedores, y caja chica.
 | `GET/POST /proveedores/` | Ya existía — catálogo de proveedores |
 | `GET /proveedores/{id}` | Detalle: cuánto se le ha comprado, cuánto se le ha pagado, saldo pendiente e historial de pagos |
 | `GET /proveedores/resumen-pagos?negocio_id=` | Para el Dashboard: proveedores con saldo pendiente (cuentas por pagar) |
+| `GET /proveedores/exportar-word` | Descarga la lista de proveedores como documento Word (.docx) — el Excel y el PDF se generan directo en el navegador, sin pasar por el backend |
 | `POST /proveedores/{id}/pagos?negocio_id=` | Registra un pago real al proveedor — genera el egreso — **solo administradores** |
 | `PATCH/DELETE /proveedores/{id}/pagos/{pago_id}` | Corrige o quita un pago — **solo administradores** |
 | `GET/POST /caja-chica/` | Fondo fijo para gastos menores de oficina (distinto de la caja del POS) — crear es **solo administradores** |

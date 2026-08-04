@@ -75,15 +75,37 @@ class LoginRequest(BaseModel):
 class ProveedorBase(BaseModel):
     nombre: str
     contacto: Optional[str] = None
+    telefono: Optional[str] = None
+    direccion: Optional[str] = None
 
 
 class ProveedorCreate(ProveedorBase):
     pass
 
 
+class ProveedorUpdate(BaseModel):
+    nombre: Optional[str] = None
+    contacto: Optional[str] = None
+    telefono: Optional[str] = None
+    direccion: Optional[str] = None
+
+
 class Proveedor(ProveedorBase):
     model_config = ConfigDict(from_attributes=True)
     id: int
+
+
+class ProveedorImportarItem(BaseModel):
+    nombre: str
+    contacto: Optional[str] = None
+    telefono: Optional[str] = None
+    direccion: Optional[str] = None
+
+
+class ProveedorImportarResultado(BaseModel):
+    creados: int
+    omitidos: int
+    proveedores: list[Proveedor]
 
 
 class PagoProveedorCreate(BaseModel):

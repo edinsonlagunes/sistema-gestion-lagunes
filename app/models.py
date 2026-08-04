@@ -129,7 +129,9 @@ class Proveedor(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     nombre = Column(String, nullable=False)
-    contacto = Column(String, nullable=True)
+    contacto = Column(String, nullable=True)  # nombre de la persona de contacto
+    telefono = Column(String, nullable=True)
+    direccion = Column(String, nullable=True)
 
     compras = relationship("Compra", back_populates="proveedor")
     pagos = relationship("PagoProveedor", back_populates="proveedor", cascade="all, delete-orphan")

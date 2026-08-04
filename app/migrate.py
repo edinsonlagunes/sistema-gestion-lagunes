@@ -111,6 +111,20 @@ def migrar_columnas():
         else:
             print("colaboradores.profesion ya existe — nada que hacer.")
 
+        if not _tiene_columna(inspector, "proveedores", "telefono"):
+            print("Agregando columna telefono a proveedores...")
+            conn.execute(text("ALTER TABLE proveedores ADD COLUMN telefono VARCHAR"))
+            conn.commit()
+        else:
+            print("proveedores.telefono ya existe — nada que hacer.")
+
+        if not _tiene_columna(inspector, "proveedores", "direccion"):
+            print("Agregando columna direccion a proveedores...")
+            conn.execute(text("ALTER TABLE proveedores ADD COLUMN direccion VARCHAR"))
+            conn.commit()
+        else:
+            print("proveedores.direccion ya existe — nada que hacer.")
+
 
 def fix_ingresos_proyecto():
     """
