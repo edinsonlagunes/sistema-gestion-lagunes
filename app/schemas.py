@@ -113,6 +113,7 @@ class PagoProveedorCreate(BaseModel):
     fecha_pago: Optional[datetime] = None
     medio_pago: str = "transferencia"
     descripcion: Optional[str] = None
+    tipo_comprobante: Optional[str] = None
 
 
 class PagoProveedorUpdate(BaseModel):
@@ -196,6 +197,7 @@ class IngresoCreate(BaseModel):
     monto: float
     medio_pago: str = "efectivo"
     descripcion: Optional[str] = None
+    tipo_comprobante: Optional[str] = None
 
 
 class Ingreso(IngresoCreate):
@@ -211,6 +213,7 @@ class EgresoCreate(BaseModel):
     categoria: str
     monto: float
     descripcion: Optional[str] = None
+    tipo_comprobante: Optional[str] = None
 
 
 class Egreso(EgresoCreate):
@@ -296,6 +299,7 @@ class VentaCreate(BaseModel):
     colaborador_id: int
     medio_pago: str = "efectivo"
     cliente: Optional[str] = None
+    tipo_comprobante: Optional[str] = None
     items: list[VentaItemCreate]
 
 
@@ -406,6 +410,7 @@ class PagoProyectoCreate(BaseModel):
     tipo: str = "cuota"  # adelanto, cuota, pago_final, otro
     medio_pago: str = "efectivo"
     descripcion: Optional[str] = None
+    tipo_comprobante: Optional[str] = None
 
 
 class PagoProyectoUpdate(BaseModel):
@@ -429,6 +434,7 @@ class PagoProyectoOut(BaseModel):
 
 class ResumenPagoProyecto(BaseModel):
     proyecto_id: int
+    negocio_id: int
     nombre: str
     tipo_proyecto: Optional[str] = None
     total_facturado: float
@@ -731,6 +737,7 @@ class Asistencia(BaseModel):
     colaborador_id: int
     colaborador_nombre: Optional[str] = None
     colaborador_rol: Optional[str] = None
+    negocio_id: Optional[int] = None
     fecha: date
     hora_entrada: datetime
     hora_salida: Optional[datetime] = None
@@ -841,6 +848,7 @@ class MovimientoFinanciero(BaseModel):
     descripcion: Optional[str] = None
     fecha: datetime
     venta_id: Optional[int] = None  # si el ingreso viene de una venta del POS, para poder corregirla ahí mismo
+    tipo_comprobante: Optional[str] = None
 
 
 class MovimientosDiaResumen(BaseModel):
@@ -888,3 +896,11 @@ class PuntoSerieFinanciera(BaseModel):
     ventas_total: float
     proyectos_facturado: float
     proyectos_cobrado: float
+
+
+class ResumenComprobante(BaseModel):
+    tipo_comprobante: str  # "factura", "boleta", "sin_comprobante", u otro valor libre
+    cantidad_ingresos: int
+    total_ingresos: float
+    cantidad_egresos: int
+    total_egresos: float

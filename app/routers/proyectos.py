@@ -99,6 +99,7 @@ def resumen_pagos(negocio_id: int | None = None, db: Session = Depends(get_db)):
         resultado.append(
             schemas.ResumenPagoProyecto(
                 proyecto_id=p.id,
+                negocio_id=p.negocio_id,
                 nombre=p.nombre,
                 tipo_proyecto=p.tipo_proyecto,
                 total_facturado=total_facturado,
@@ -320,6 +321,7 @@ def registrar_pago(
             descripcion=f"{etiquetas_tipo.get(pago.tipo, 'Pago')} - Proyecto '{proyecto.nombre}'",
             fecha=pago.fecha_pago,
             pago_proyecto_id=pago.id,
+            tipo_comprobante=data.tipo_comprobante,
         )
     )
 

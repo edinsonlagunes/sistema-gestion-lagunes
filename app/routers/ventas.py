@@ -88,6 +88,7 @@ def registrar_venta(data: schemas.VentaCreate, db: Session = Depends(get_db)):
             medio_pago=data.medio_pago,
             descripcion=f"Venta #{venta.id}" + (f" - {data.cliente}" if data.cliente else ""),
             venta_id=venta.id,
+            tipo_comprobante=data.tipo_comprobante,
         )
     )
 

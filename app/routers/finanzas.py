@@ -112,6 +112,7 @@ def movimientos_dia(
             descripcion=i.descripcion,
             fecha=i.fecha,
             venta_id=i.venta_id,
+            tipo_comprobante=i.tipo_comprobante,
         )
         for i in ingresos
     ] + [
@@ -123,6 +124,7 @@ def movimientos_dia(
             categoria=e.categoria,
             descripcion=e.descripcion,
             fecha=e.fecha,
+            tipo_comprobante=e.tipo_comprobante,
         )
         for e in egresos
     ]
@@ -402,4 +404,63 @@ def serie_financiera(
         for b in buckets.values()
     ]
     resultado.sort(key=lambda r: r.fecha_inicio)
+    return resultado
+
+
+@router.get("/comprobantes", response_model=list[schemas.ResumenComprobante])
+def resumen_comprobantes(
+    negocio_id: int | None = None,
+    desde: date | None = None,
+    hasta: date | None = None,
+    db: Session = Depends(get_db),
+    _admin: models.Usuario = Depends(requerir_admin),
+):
+    """
+    Agrupa ingresos y egresos por tipo de comprobante (factura, boleta,
+    sin comprobante...) — para saber cuánto de lo cobrado/pagado tiene
+    respaldo formal. Sin fechas, considera todo el historial. Solo
+    administradores.
+    """
+    query_ingresos = db.query(models.Ingreso)
+    query_egresos = db.query(models.Egreso)
+    if negocio_id is not None:
+        query_ingresos = query_ingresos.filter(models.Ingreso.negocio_id == negocio_id)
+        query_egresos = query_egresos.filter(models.Egreso.negocio_id == negocio_id)
+    if desde is not None:
+        inicio_dt = datetime.combine(desde, time.min)
+        query_ingresos = query_ingresos.filter(models.Ingreso.fecha >= inicio_dt)
+        query_egresos = query_egresos.filter(models.Egreso.fecha >= inicio_dt)
+    if hasta is not None:
+        fin_dt = datetime.combine(hasta, time.max)
+        query_ingresos = query_ingresos.filter(models.Ingreso.fecha <= fin_dt)
+        query_egresos = query_egresos.filter(models.Egreso.fecha <= fin_dt)
+
+    acumulado: dict[str, dict] = {}
+
+    def bucket(tipo):
+        clave = tipo or "sin_especificar"
+        if clave not in acumulado:
+            acumulado[clave] = {"cantidad_ingresos": 0, "total_ingresos": 0.0, "cantidad_egresos": 0, "total_egresos": 0.0}
+        return acumulado[clave]
+
+    for i in query_ingresos.all():
+        b = bucket(i.tipo_comprobante)
+        b["cantidad_ingresos"] += 1
+        b["total_ingresos"] += i.monto
+    for e in query_egresos.all():
+        b = bucket(e.tipo_comprobante)
+        b["cantidad_egresos"] += 1
+        b["total_egresos"] += e.monto
+
+    resultado = [
+        schemas.ResumenComprobante(
+            tipo_comprobante=clave,
+            cantidad_ingresos=b["cantidad_ingresos"],
+            total_ingresos=round(b["total_ingresos"], 2),
+            cantidad_egresos=b["cantidad_egresos"],
+            total_egresos=round(b["total_egresos"], 2),
+        )
+        for clave, b in acumulado.items()
+    ]
+    resultado.sort(key=lambda r: r.total_ingresos + r.total_egresos, reverse=True)
     return resultado

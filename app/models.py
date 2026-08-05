@@ -178,6 +178,7 @@ class Ingreso(Base):
     orden_servicio_id = Column(Integer, ForeignKey("ordenes_servicio.id"), nullable=True)  # ya no se usa para crear ingresos nuevos, se deja por compatibilidad
     pago_proyecto_id = Column(Integer, ForeignKey("pagos_proyecto.id"), nullable=True)
     venta_id = Column(Integer, ForeignKey("ventas.id"), nullable=True)
+    tipo_comprobante = Column(String, nullable=True)  # factura, boleta, sin_comprobante...
 
     negocio = relationship("Negocio", back_populates="ingresos")
 
@@ -192,6 +193,7 @@ class Egreso(Base):
     descripcion = Column(String, nullable=True)
     fecha = Column(DateTime, default=ahora_peru)
     pago_proveedor_id = Column(Integer, ForeignKey("pagos_proveedor.id"), nullable=True)
+    tipo_comprobante = Column(String, nullable=True)  # factura, boleta, sin_comprobante...
 
     negocio = relationship("Negocio", back_populates="egresos")
 

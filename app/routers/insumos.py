@@ -310,6 +310,7 @@ def registrar_pago_proveedor(
             descripcion=f"Pago a proveedor - {proveedor.nombre}" + (f" ({data.descripcion})" if data.descripcion else ""),
             fecha=pago.fecha_pago,
             pago_proveedor_id=pago.id,
+            tipo_comprobante=data.tipo_comprobante,
         )
     )
 

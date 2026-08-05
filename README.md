@@ -145,6 +145,7 @@ para automatizar la carga.
 | `GET /finanzas/conciliacion-diaria?fecha=&negocio_id=` | El día agrupado por colaborador (y su puesto/equipos): cuánto vendió, cuántas ventas, cuántas impresiones. Pensado para que el encargado de caja haga el cuadre — accesible a cualquier usuario logueado |
 | `GET /finanzas/reporte?periodo=diario\|semanal\|mensual\|anual&fecha=&negocio_id=` | Balance del periodo completo (el día, la semana lunes-domingo, el mes, o el año) — **solo administradores** |
 | `GET /finanzas/serie?agrupacion=dia\|semana\|mes\|anio&negocio_id=&desde=&hasta=` | Ingresos, egresos, ventas del POS, y facturación/cobros de proyectos, agrupados por periodo — control de ingresos y egresos de toda la empresa a lo largo del tiempo — **solo administradores** |
+| `GET /finanzas/comprobantes?negocio_id=&desde=&hasta=` | Agrupa ingresos y egresos por tipo de comprobante (factura, boleta, sin especificar...) — **solo administradores** |
 
 **Nota**: el envío automático de estos reportes por correo (diario/semanal/mensual)
 no está construido todavía — requiere conectar un servicio de email
