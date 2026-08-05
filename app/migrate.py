@@ -307,6 +307,25 @@ def renombrar_negocio_libreria():
         db.close()
 
 
+def crear_negocio_constructora():
+    """
+    Crea el negocio "Constructora" (ejecución de obras), separado del
+    Estudio de Arquitectura e Ingeniería (diseño/expedientes) — la
+    empresa opera como tres líneas de negocio distintas. Idempotente.
+    """
+    db = SessionLocal()
+    try:
+        existente = db.query(models.Negocio).filter(models.Negocio.nombre == "Constructora").first()
+        if existente:
+            print("El negocio 'Constructora' ya existe — nada que crear.")
+        else:
+            db.add(models.Negocio(nombre="Constructora"))
+            db.commit()
+            print("Se creó el negocio 'Constructora'.")
+    finally:
+        db.close()
+
+
 def migrar():
     migrar_columnas()
     fix_ingresos_proyecto()
@@ -315,6 +334,7 @@ def migrar():
     fix_ventas_sin_vinculo()
     renombrar_negocio_constructora()
     renombrar_negocio_libreria()
+    crear_negocio_constructora()
     print("Migración completa.")
 
 
