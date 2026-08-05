@@ -11,6 +11,7 @@ from app.routers import (
     colaboradores,
     compras,
     documentos,
+    email,
     finanzas,
     impresiones,
     insumos,
@@ -61,6 +62,7 @@ app.include_router(tipos_proyecto.router)
 app.include_router(puestos_trabajo.router)
 app.include_router(asistencia.router)
 app.include_router(impresiones.router)
+app.include_router(email.router)
 
 
 @app.get("/")
