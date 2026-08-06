@@ -119,9 +119,67 @@ class Usuario(Base):
     colaborador_id = Column(Integer, ForeignKey("colaboradores.id"), unique=True, nullable=False)
     username = Column(String, unique=True, nullable=False)
     password_hash = Column(String, nullable=False)
-    rol_permiso = Column(String, nullable=False, default="colaborador")  # admin | colaborador
+    rol_permiso = Column(String, nullable=False, default="colaborador")  # admin | colaborador — se mantiene por compatibilidad mientras se migra cada módulo al sistema de roles nuevo
+
+    # --- Sistema de roles y permisos granular ---
+    rol_id = Column(Integer, ForeignKey("roles.id"), nullable=True)  # rol editable (Finanzas, RRHH, Proyectista, etc.)
+    es_superadmin = Column(Boolean, nullable=False, default=False)  # acceso total siempre, sin depender de permisos
 
     colaborador = relationship("Colaborador", back_populates="usuario")
+    rol_asignado = relationship("Rol")
+    permisos_especiales = relationship("PermisoEspecial", back_populates="usuario", cascade="all, delete-orphan")
+
+
+class Rol(Base):
+    """
+    Un rol editable de la empresa (Administrador, Finanzas, Recursos
+    Humanos, Proyectista...). El gerente general los crea, nombra y
+    borra libremente desde la pantalla de administración — no son una
+    lista fija en el código.
+    """
+    __tablename__ = "roles"
+
+    id = Column(Integer, primary_key=True, index=True)
+    nombre = Column(String, unique=True, nullable=False)
+    creado_en = Column(DateTime, default=ahora_peru)
+
+    permisos = relationship("PermisoRol", back_populates="rol", cascade="all, delete-orphan")
+
+
+class PermisoRol(Base):
+    """
+    El nivel de acceso que tiene un rol sobre un módulo del sistema.
+    nivel: sin_acceso | ver | editar
+    """
+    __tablename__ = "permisos_rol"
+
+    id = Column(Integer, primary_key=True, index=True)
+    rol_id = Column(Integer, ForeignKey("roles.id"), nullable=False)
+    modulo = Column(String, nullable=False)  # "proyectos", "finanzas", etc. — ver app/permisos.py
+    nivel = Column(String, nullable=False, default="sin_acceso")
+
+    rol = relationship("Rol", back_populates="permisos")
+
+
+class PermisoEspecial(Base):
+    """
+    Permiso adicional sobre un módulo, otorgado a UNA persona en
+    particular, por encima de lo que le da su rol — para casos
+    puntuales (ej. delegarle a alguien la edición de Finanzas por un
+    tiempo) sin cambiarle el rol ni afectar a nadie más. Se puede
+    quitar en cualquier momento; al quitarse, la persona vuelve a
+    depender solo de su rol.
+    nivel: ver | editar
+    """
+    __tablename__ = "permisos_especiales"
+
+    id = Column(Integer, primary_key=True, index=True)
+    usuario_id = Column(Integer, ForeignKey("usuarios.id"), nullable=False)
+    modulo = Column(String, nullable=False)
+    nivel = Column(String, nullable=False)
+    otorgado_en = Column(DateTime, default=ahora_peru)
+
+    usuario = relationship("Usuario", back_populates="permisos_especiales")
 
 
 class Proveedor(Base):

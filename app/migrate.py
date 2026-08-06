@@ -18,6 +18,11 @@ from sqlalchemy import inspect, text
 from app import models
 from app.database import SessionLocal, engine
 
+# IMPORTANTE: antes de correr la migración, cambia esto por tu username
+# real de administrador (el que usas para iniciar sesión en el sistema).
+# Sirve para marcarte como superadministrador con acceso total.
+USUARIO_SUPERADMIN = "admin"
+
 
 def _tiene_columna(inspector, tabla, columna):
     return any(c["name"] == columna for c in inspector.get_columns(tabla))
@@ -138,6 +143,21 @@ def migrar_columnas():
             conn.commit()
         else:
             print("proveedores.direccion ya existe — nada que hacer.")
+
+        # --- Sistema de roles y permisos ---
+        if not _tiene_columna(inspector, "usuarios", "rol_id"):
+            print("Agregando columna rol_id a usuarios...")
+            conn.execute(text("ALTER TABLE usuarios ADD COLUMN rol_id INTEGER"))
+            conn.commit()
+        else:
+            print("usuarios.rol_id ya existe — nada que hacer.")
+
+        if not _tiene_columna(inspector, "usuarios", "es_superadmin"):
+            print("Agregando columna es_superadmin a usuarios...")
+            conn.execute(text("ALTER TABLE usuarios ADD COLUMN es_superadmin BOOLEAN DEFAULT FALSE"))
+            conn.commit()
+        else:
+            print("usuarios.es_superadmin ya existe — nada que hacer.")
 
 
 def fix_ingresos_proyecto():
@@ -340,6 +360,93 @@ def crear_negocio_constructora():
         db.close()
 
 
+# Módulos del sistema sobre los que se define acceso por rol. Debe
+# coincidir con app/permisos.py.
+MODULOS_INICIALES = [
+    "proyectos", "compras", "colaboradores", "finanzas", "documentos",
+    "caja_chica", "planillas", "asistencia", "ventas_impresiones",
+    "conciliacion", "mantenimientos", "agenda",
+]
+
+# Roles de partida sugeridos — se pueden editar, renombrar o borrar
+# desde la pantalla de administración una vez que exista; esto solo
+# les da un punto de arranque razonable.
+ROLES_INICIALES = {
+    "Administrador": {modulo: "editar" for modulo in MODULOS_INICIALES},
+    "Finanzas": {
+        "finanzas": "editar", "caja_chica": "editar", "compras": "ver",
+        "ventas_impresiones": "ver", "conciliacion": "ver",
+    },
+    "Recursos Humanos": {
+        "colaboradores": "editar", "asistencia": "editar", "planillas": "editar",
+    },
+    "Proyectista": {
+        "proyectos": "editar", "documentos": "editar", "agenda": "editar",
+    },
+}
+
+
+def seed_roles_iniciales():
+    """
+    Crea los roles de partida (Administrador, Finanzas, Recursos
+    Humanos, Proyectista) con permisos razonables por defecto, si
+    todavía no existe ningún rol con ese nombre. Editable después desde
+    el sistema — esto es solo el punto de arranque. Idempotente.
+    """
+    db = SessionLocal()
+    try:
+        creados = 0
+        for nombre_rol, permisos_modulo in ROLES_INICIALES.items():
+            existente = db.query(models.Rol).filter(models.Rol.nombre == nombre_rol).first()
+            if existente:
+                continue
+            rol = models.Rol(nombre=nombre_rol)
+            db.add(rol)
+            db.flush()  # para tener rol.id antes de crear sus permisos
+            for modulo in MODULOS_INICIALES:
+                db.add(
+                    models.PermisoRol(
+                        rol_id=rol.id,
+                        modulo=modulo,
+                        nivel=permisos_modulo.get(modulo, "sin_acceso"),
+                    )
+                )
+            creados += 1
+        if creados:
+            print(f"Se crearon {creados} rol(es) inicial(es): {', '.join(ROLES_INICIALES.keys())}.")
+        else:
+            print("Los roles iniciales ya existían — nada que crear.")
+        db.commit()
+    finally:
+        db.close()
+
+
+def marcar_superadmin():
+    """
+    Marca tu usuario (definido en USUARIO_SUPERADMIN, arriba del
+    archivo) como superadministrador: acceso total al sistema siempre,
+    sin depender de roles ni permisos. Idempotente.
+    """
+    if USUARIO_SUPERADMIN == "CAMBIAR_POR_TU_USERNAME":
+        print("AVISO: no se marcó ningún superadministrador — edita USUARIO_SUPERADMIN al inicio de este archivo con tu username real y vuelve a correr la migración.")
+        return
+
+    db = SessionLocal()
+    try:
+        usuario = db.query(models.Usuario).filter(models.Usuario.username == USUARIO_SUPERADMIN).first()
+        if not usuario:
+            print(f"AVISO: no se encontró ningún usuario con username '{USUARIO_SUPERADMIN}' — revisa que esté bien escrito.")
+            return
+        if usuario.es_superadmin:
+            print(f"El usuario '{USUARIO_SUPERADMIN}' ya era superadministrador — nada que hacer.")
+        else:
+            usuario.es_superadmin = True
+            db.commit()
+            print(f"Se marcó a '{USUARIO_SUPERADMIN}' como superadministrador.")
+    finally:
+        db.close()
+
+
 def migrar():
     migrar_columnas()
     fix_ingresos_proyecto()
@@ -349,6 +456,8 @@ def migrar():
     renombrar_negocio_constructora()
     renombrar_negocio_libreria()
     crear_negocio_constructora()
+    seed_roles_iniciales()
+    marcar_superadmin()
     print("Migración completa.")
 
 
