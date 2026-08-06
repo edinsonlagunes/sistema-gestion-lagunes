@@ -3,7 +3,7 @@ import resend
 
 resend.api_key = os.environ.get("RESEND_API_KEY", "")
 
-REMITENTE = os.environ.get("EMAIL_REMITENTE", "onboarding@resend.dev")
+REMITENTE = os.environ.get("EMAIL_REMITENTE", "Sistema Lagunes <onboarding@resend.dev>").strip()
 DESTINATARIOS = [
     correo.strip()
     for correo in os.environ.get("EMAIL_DESTINATARIOS", "").split(",")
@@ -29,7 +29,7 @@ def enviar_alerta(asunto: str, cuerpo_html: str, destinatarios: list[str] | None
 
     try:
         resend.Emails.send({
-            "from": f"Sistema Lagunes <{REMITENTE}>",
+            "from": REMITENTE,
             "to": destinos,
             "subject": asunto,
             "html": cuerpo_html,
