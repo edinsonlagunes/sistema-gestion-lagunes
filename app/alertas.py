@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 from sqlalchemy.orm import Session
 
@@ -129,5 +129,108 @@ def revisar_cobros_pendientes(db: Session) -> bool:
 
     return enviar_alerta(
         asunto=f"Alerta: S/ {total_pendiente:.2f} en cobros pendientes ({len(filas_data)} proyecto(s))",
+        cuerpo_html=cuerpo_html,
+    )
+
+
+TOLERANCIA_DISCREPANCIA = 1.15  # misma tolerancia que usa la pantalla de Conciliación
+
+
+def _hay_discrepancia(total_impresiones_estimado: float, total_ventas: float) -> bool:
+    if not total_impresiones_estimado or total_impresiones_estimado <= 0:
+        return False
+    return total_impresiones_estimado > total_ventas * TOLERANCIA_DISCREPANCIA
+
+
+def revisar_conciliacion(db: Session) -> bool:
+    """
+    Revisa el día de ayer, negocio por negocio, buscando colaboradores
+    cuyas impresiones estimadas superan en más de 15% lo que vendieron
+    ese día (la misma regla que usa la pantalla de Conciliación). Si
+    encuentra alguna discrepancia, manda un correo con el detalle.
+    """
+    dia = ahora_peru().date() - timedelta(days=1)
+    inicio = datetime.combine(dia, datetime.min.time())
+    fin = datetime.combine(dia, datetime.max.time())
+
+    filas_data = []
+    for negocio in db.query(models.Negocio).all():
+        ventas = (
+            db.query(models.Venta)
+            .filter(models.Venta.negocio_id == negocio.id, models.Venta.fecha >= inicio, models.Venta.fecha <= fin)
+            .all()
+        )
+        impresiones = (
+            db.query(models.RegistroImpresion)
+            .filter(
+                models.RegistroImpresion.negocio_id == negocio.id,
+                models.RegistroImpresion.fecha >= inicio,
+                models.RegistroImpresion.fecha <= fin,
+            )
+            .all()
+        )
+
+        acumulado: dict[int, dict] = {}
+        for v in ventas:
+            if v.colaborador_id is None:
+                continue
+            datos = acumulado.setdefault(v.colaborador_id, {"total_ventas": 0.0, "total_impresiones_estimado": 0.0})
+            datos["total_ventas"] += v.total
+
+        for r in impresiones:
+            if r.colaborador_id is None:
+                continue
+            datos = acumulado.setdefault(r.colaborador_id, {"total_ventas": 0.0, "total_impresiones_estimado": 0.0})
+            servicio = (
+                db.query(models.Servicio)
+                .filter(
+                    models.Servicio.negocio_id == r.negocio_id,
+                    models.Servicio.categoria == r.tipo_trabajo,
+                    models.Servicio.tamano == r.tamano,
+                )
+                .first()
+            )
+            if servicio:
+                datos["total_impresiones_estimado"] += servicio.precio_unitario * r.cantidad
+
+        for colaborador_id, datos in acumulado.items():
+            if not _hay_discrepancia(datos["total_impresiones_estimado"], datos["total_ventas"]):
+                continue
+            colaborador = db.query(models.Colaborador).get(colaborador_id)
+            filas_data.append(
+                {
+                    "negocio": negocio.nombre,
+                    "colaborador": colaborador.nombre if colaborador else f"Colaborador #{colaborador_id}",
+                    "ventas": datos["total_ventas"],
+                    "impresiones_estimado": datos["total_impresiones_estimado"],
+                }
+            )
+
+    if not filas_data:
+        return False
+
+    filas_html = "".join(
+        "<tr>"
+        f"<td>{f['negocio']}</td>"
+        f"<td>{f['colaborador']}</td>"
+        f"<td>S/ {f['ventas']:.2f}</td>"
+        f"<td>S/ {f['impresiones_estimado']:.2f}</td>"
+        "</tr>"
+        for f in filas_data
+    )
+
+    cuerpo_html = f"""
+    <h2>Discrepancias de conciliación — {dia.isoformat()}</h2>
+    <p>Colaboradores cuyas impresiones estimadas superan en más de 15% lo que vendieron ese día:</p>
+    <table border="1" cellpadding="6" cellspacing="0" style="border-collapse:collapse">
+      <tr>
+        <th>Negocio</th><th>Colaborador</th><th>Vendido</th><th>Impresiones (estimado)</th>
+      </tr>
+      {filas_html}
+    </table>
+    """
+
+    return enviar_alerta(
+        asunto=f"Alerta: {len(filas_data)} discrepancia(s) de conciliación — {dia.isoformat()}",
         cuerpo_html=cuerpo_html,
     )

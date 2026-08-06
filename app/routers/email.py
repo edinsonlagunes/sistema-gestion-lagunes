@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
-from app.alertas import revisar_cobros_pendientes, revisar_documentos_por_vencer
+from app.alertas import revisar_cobros_pendientes, revisar_conciliacion, revisar_documentos_por_vencer
 from app.auth import requerir_admin
 from app.database import get_db
 from app.email_service import enviar_alerta
@@ -54,5 +54,23 @@ def revisar_cobros(usuario=Depends(requerir_admin), db: Session = Depends(get_db
             "Se encontraron proyectos con saldo pendiente y se envió el correo."
             if enviado
             else "No hay proyectos con saldo pendiente de cobro en este momento — no se envió correo."
+        ),
+    }
+
+
+@router.post("/revisar-conciliacion")
+def revisar_conciliacion_ruta(usuario=Depends(requerir_admin), db: Session = Depends(get_db)):
+    """
+    Dispara manualmente la revisión de discrepancias de conciliación del
+    día de ayer (la misma que corre sola todos los días). Útil para
+    probarla sin esperar a la hora programada.
+    """
+    enviado = revisar_conciliacion(db)
+    return {
+        "enviado": enviado,
+        "mensaje": (
+            "Se encontraron discrepancias de conciliación y se envió el correo."
+            if enviado
+            else "No hay discrepancias de conciliación en el día de ayer — no se envió correo."
         ),
     }
