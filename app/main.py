@@ -1,7 +1,9 @@
+from apscheduler.schedulers.background import BackgroundScheduler
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.database import Base, engine
+from app.alertas import revisar_documentos_por_vencer
+from app.database import Base, SessionLocal, engine
 from app.routers import (
     agenda,
     asistencia,
@@ -63,6 +65,19 @@ app.include_router(puestos_trabajo.router)
 app.include_router(asistencia.router)
 app.include_router(impresiones.router)
 app.include_router(email.router)
+
+
+def _job_documentos_por_vencer():
+    db = SessionLocal()
+    try:
+        revisar_documentos_por_vencer(db)
+    finally:
+        db.close()
+
+
+scheduler = BackgroundScheduler(timezone="America/Lima")
+scheduler.add_job(_job_documentos_por_vencer, "cron", hour=7, minute=0)
+scheduler.start()
 
 
 @app.get("/")
