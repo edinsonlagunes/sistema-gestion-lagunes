@@ -66,3 +66,68 @@ def revisar_documentos_por_vencer(db: Session) -> bool:
         asunto=f"Alerta: {len(documentos)} documento(s) vencidos o por vencer",
         cuerpo_html=cuerpo_html,
     )
+
+
+def revisar_cobros_pendientes(db: Session) -> bool:
+    """
+    Revisa todos los proyectos con saldo pendiente de cobro (lo
+    facturado menos lo efectivamente pagado) y, si hay alguno, manda un
+    correo con el resumen. Devuelve True si mandó correo, False si no
+    había nada pendiente.
+    """
+    proyectos = db.query(models.Proyecto).all()
+    filas_data = []
+    for p in proyectos:
+        total_facturado = sum(o.subtotal for o in p.ordenes)
+        total_pagado = sum(pago.monto for pago in p.pagos)
+        saldo = total_facturado - total_pagado
+        if saldo <= 0:
+            continue
+
+        negocio = db.query(models.Negocio).get(p.negocio_id)
+        ultimo_pago = max(p.pagos, key=lambda pago: pago.fecha_pago) if p.pagos else None
+        filas_data.append(
+            {
+                "proyecto": p.nombre,
+                "cliente": p.cliente.nombre if p.cliente else "—",
+                "negocio": negocio.nombre if negocio else "—",
+                "facturado": total_facturado,
+                "pagado": total_pagado,
+                "saldo": saldo,
+                "ultimo_pago_fecha": ultimo_pago.fecha_pago.date().isoformat() if ultimo_pago else "Sin pagos aún",
+            }
+        )
+
+    if not filas_data:
+        return False
+
+    filas_data.sort(key=lambda f: f["saldo"], reverse=True)
+    total_pendiente = sum(f["saldo"] for f in filas_data)
+    filas_html = "".join(
+        "<tr>"
+        f"<td>{f['proyecto']}</td>"
+        f"<td>{f['cliente']}</td>"
+        f"<td>{f['negocio']}</td>"
+        f"<td>S/ {f['facturado']:.2f}</td>"
+        f"<td>S/ {f['pagado']:.2f}</td>"
+        f"<td><strong>S/ {f['saldo']:.2f}</strong></td>"
+        f"<td>{f['ultimo_pago_fecha']}</td>"
+        "</tr>"
+        for f in filas_data
+    )
+
+    cuerpo_html = f"""
+    <h2>Cobros pendientes</h2>
+    <p>Proyectos con saldo pendiente de cobro (total: S/ {total_pendiente:.2f}):</p>
+    <table border="1" cellpadding="6" cellspacing="0" style="border-collapse:collapse">
+      <tr>
+        <th>Proyecto</th><th>Cliente</th><th>Negocio</th><th>Facturado</th><th>Pagado</th><th>Saldo</th><th>Último pago</th>
+      </tr>
+      {filas_html}
+    </table>
+    """
+
+    return enviar_alerta(
+        asunto=f"Alerta: S/ {total_pendiente:.2f} en cobros pendientes ({len(filas_data)} proyecto(s))",
+        cuerpo_html=cuerpo_html,
+    )

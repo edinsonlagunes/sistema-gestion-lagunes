@@ -2,7 +2,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.alertas import revisar_documentos_por_vencer
+from app.alertas import revisar_cobros_pendientes, revisar_documentos_por_vencer
 from app.database import Base, SessionLocal, engine
 from app.routers import (
     agenda,
@@ -75,8 +75,17 @@ def _job_documentos_por_vencer():
         db.close()
 
 
+def _job_cobros_pendientes():
+    db = SessionLocal()
+    try:
+        revisar_cobros_pendientes(db)
+    finally:
+        db.close()
+
+
 scheduler = BackgroundScheduler(timezone="America/Lima")
 scheduler.add_job(_job_documentos_por_vencer, "cron", hour=7, minute=0)
+scheduler.add_job(_job_cobros_pendientes, "cron", hour=7, minute=5)
 scheduler.start()
 
 

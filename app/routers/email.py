@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
-from app.alertas import revisar_documentos_por_vencer
+from app.alertas import revisar_cobros_pendientes, revisar_documentos_por_vencer
 from app.auth import requerir_admin
 from app.database import get_db
 from app.email_service import enviar_alerta
@@ -36,5 +36,23 @@ def revisar_documentos(usuario=Depends(requerir_admin), db: Session = Depends(ge
             "Se encontraron documentos por vencer y se envió el correo."
             if enviado
             else "No hay documentos vencidos ni por vencer en este momento — no se envió correo."
+        ),
+    }
+
+
+@router.post("/revisar-cobros")
+def revisar_cobros(usuario=Depends(requerir_admin), db: Session = Depends(get_db)):
+    """
+    Dispara manualmente la revisión de cobros pendientes (la misma que
+    corre sola todos los días). Útil para probarla sin esperar a la
+    hora programada.
+    """
+    enviado = revisar_cobros_pendientes(db)
+    return {
+        "enviado": enviado,
+        "mensaje": (
+            "Se encontraron proyectos con saldo pendiente y se envió el correo."
+            if enviado
+            else "No hay proyectos con saldo pendiente de cobro en este momento — no se envió correo."
         ),
     }
