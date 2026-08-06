@@ -56,6 +56,7 @@ class UsuarioCreate(BaseModel):
     username: str
     password: str
     rol_permiso: str = "colaborador"
+    rol_id: Optional[int] = None
 
 
 class Usuario(BaseModel):
@@ -64,6 +65,8 @@ class Usuario(BaseModel):
     colaborador_id: int
     username: str
     rol_permiso: str
+    rol_id: Optional[int] = None
+    es_superadmin: bool = False
 
 
 class LoginRequest(BaseModel):
@@ -904,3 +907,44 @@ class ResumenComprobante(BaseModel):
     total_ingresos: float
     cantidad_egresos: int
     total_egresos: float
+
+
+# ---------- Roles y permisos ----------
+class PermisoRolOut(BaseModel):
+    modulo: str
+    nivel: str
+
+
+class RolCreate(BaseModel):
+    nombre: str
+    permisos: Optional[dict[str, str]] = None  # modulo -> nivel; los que no se manden quedan en sin_acceso
+
+
+class RolUpdate(BaseModel):
+    nombre: Optional[str] = None
+    permisos: Optional[dict[str, str]] = None  # modulo -> nivel; solo actualiza los que mandes
+
+
+class RolOut(BaseModel):
+    id: int
+    nombre: str
+    permisos: list[PermisoRolOut]
+
+
+class AsignarRolRequest(BaseModel):
+    rol_id: Optional[int] = None  # None = quitar el rol (la persona queda sin rol asignado)
+
+
+class PermisoEspecialCreate(BaseModel):
+    usuario_id: int
+    modulo: str
+    nivel: str  # ver | editar
+
+
+class PermisoEspecialOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    usuario_id: int
+    modulo: str
+    nivel: str
+    otorgado_en: datetime

@@ -2,11 +2,18 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app import models, schemas
-from app.auth import crear_token, requerir_admin
+from app.auth import crear_token, requerir_admin, requerir_superadmin
 from app.database import get_db
+from app.permisos import permisos_de_usuario
 from app.security import hash_password, verify_password
 
 router = APIRouter(prefix="/usuarios", tags=["Usuarios"])
+
+
+@router.get("/", response_model=list[schemas.Usuario])
+def listar_usuarios(db: Session = Depends(get_db), _superadmin: models.Usuario = Depends(requerir_superadmin)):
+    """Para la pantalla de administración de roles — a quién asignarle qué. Solo el superadministrador."""
+    return db.query(models.Usuario).all()
 
 
 @router.post("/", response_model=schemas.Usuario)
@@ -28,6 +35,7 @@ def crear_usuario(
         username=data.username,
         password_hash=hash_password(data.password),
         rol_permiso=data.rol_permiso,
+        rol_id=data.rol_id,
     )
     db.add(usuario)
     db.commit()
@@ -52,4 +60,8 @@ def login(data: schemas.LoginRequest, db: Session = Depends(get_db)):
         "colaborador": colaborador.nombre,
         "colaborador_id": colaborador.id,
         "negocio_id": colaborador.negocio_id,
+        "es_superadmin": usuario.es_superadmin,
+        "rol_id": usuario.rol_id,
+        "rol_nombre": usuario.rol_asignado.nombre if usuario.rol_asignado else None,
+        "permisos": permisos_de_usuario(usuario, db),
     }

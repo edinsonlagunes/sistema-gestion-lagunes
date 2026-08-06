@@ -64,3 +64,13 @@ def requerir_admin(usuario: models.Usuario = Depends(obtener_usuario_actual)) ->
     if usuario.rol_permiso != "admin":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Se requiere rol de administrador")
     return usuario
+
+
+def requerir_superadmin(usuario: models.Usuario = Depends(obtener_usuario_actual)) -> models.Usuario:
+    """
+    Para las rutas de administración de roles y permisos — reservadas al
+    superadministrador (el gerente general), no a cualquier admin.
+    """
+    if not usuario.es_superadmin:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Se requiere ser superadministrador")
+    return usuario

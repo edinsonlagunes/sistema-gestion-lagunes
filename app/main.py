@@ -22,6 +22,7 @@ from app.routers import (
     planillas,
     proyectos,
     puestos_trabajo,
+    roles,
     servicios,
     tipos_proyecto,
     usuarios,
@@ -65,6 +66,7 @@ app.include_router(puestos_trabajo.router)
 app.include_router(asistencia.router)
 app.include_router(impresiones.router)
 app.include_router(email.router)
+app.include_router(roles.router)
 
 
 def _job_documentos_por_vencer():
