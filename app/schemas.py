@@ -1037,3 +1037,14 @@ class RegistroAuditoriaOut(BaseModel):
     entidad_id: Optional[int] = None
     detalle: Optional[str] = None
     fecha: datetime
+
+
+class ResumenRentabilidadProyecto(BaseModel):
+    proyecto_id: int
+    negocio_id: int
+    nombre: str
+    estado: str
+    total_facturado: float
+    costo_real_total: float
+    margen_estimado: float
+    porcentaje_margen: Optional[float] = None

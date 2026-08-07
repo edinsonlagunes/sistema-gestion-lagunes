@@ -121,12 +121,53 @@ def crear_proyecto(
     return proyecto
 
 
-@router.get("/resumen-pagos", response_model=list[schemas.ResumenPagoProyecto])
-def resumen_pagos(
+@router.get("/resumen-rentabilidad", response_model=list[schemas.ResumenRentabilidadProyecto])
+def resumen_rentabilidad(
     negocio_id: int | None = None,
+    solo_activos: bool = True,
     db: Session = Depends(get_db),
     _permiso: models.Usuario = Depends(requerir_permiso("proyectos", "ver")),
 ):
+    """
+    Para el Dashboard: rentabilidad de todos los proyectos de un
+    vistazo — facturado, costo real (mano de obra + gastos directos),
+    y margen, ordenados del que menos margen deja al que más (para que
+    los problemas salten primero). `solo_activos=True` (por defecto)
+    excluye proyectos cancelados.
+    """
+    query = db.query(models.Proyecto)
+    if negocio_id is not None:
+        query = query.filter(models.Proyecto.negocio_id == negocio_id)
+    if solo_activos:
+        query = query.filter(models.Proyecto.estado != "cancelado")
+
+    resultado = []
+    for p in query.all():
+        total_facturado = sum(o.subtotal for o in p.ordenes)
+        costo_mano_obra = sum(r.horas * _valor_hora(r.colaborador) for r in p.registros_tiempo)
+        costo_egresos_directos = sum(e.monto for e in p.egresos_directos)
+        costo_real_total = costo_mano_obra + costo_egresos_directos
+        margen_estimado = total_facturado - costo_real_total
+        porcentaje_margen = (margen_estimado / total_facturado * 100) if total_facturado else None
+
+        resultado.append(
+            schemas.ResumenRentabilidadProyecto(
+                proyecto_id=p.id,
+                negocio_id=p.negocio_id,
+                nombre=p.nombre,
+                estado=p.estado,
+                total_facturado=round(total_facturado, 2),
+                costo_real_total=round(costo_real_total, 2),
+                margen_estimado=round(margen_estimado, 2),
+                porcentaje_margen=round(porcentaje_margen, 1) if porcentaje_margen is not None else None,
+            )
+        )
+
+    resultado.sort(key=lambda r: r.margen_estimado)
+    return resultado
+
+
+
     """
     Para el Dashboard: por cada proyecto, cuánto se ha facturado, cuánto
     se ha cobrado, cuánto falta, y cuándo fue el último pago (el adelanto,
