@@ -5,15 +5,20 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app import models, schemas
-from app.auth import obtener_usuario_actual, requerir_admin
+from app.auth import obtener_usuario_actual
 from app.database import get_db
+from app.permisos import requerir_permiso
 from app.zona_horaria import ahora_peru
 
 router = APIRouter(prefix="/finanzas", tags=["Finanzas"], dependencies=[Depends(obtener_usuario_actual)])
 
 
 @router.get("/ingresos", response_model=list[schemas.Ingreso])
-def listar_ingresos(negocio_id: int | None = None, db: Session = Depends(get_db)):
+def listar_ingresos(
+    negocio_id: int | None = None,
+    db: Session = Depends(get_db),
+    _permiso: models.Usuario = Depends(requerir_permiso("finanzas", "ver")),
+):
     query = db.query(models.Ingreso)
     if negocio_id is not None:
         query = query.filter(models.Ingreso.negocio_id == negocio_id)
@@ -21,7 +26,11 @@ def listar_ingresos(negocio_id: int | None = None, db: Session = Depends(get_db)
 
 
 @router.post("/ingresos", response_model=schemas.Ingreso)
-def crear_ingreso(data: schemas.IngresoCreate, db: Session = Depends(get_db)):
+def crear_ingreso(
+    data: schemas.IngresoCreate,
+    db: Session = Depends(get_db),
+    _permiso: models.Usuario = Depends(requerir_permiso("finanzas", "editar")),
+):
     if not db.query(models.Negocio).get(data.negocio_id):
         raise HTTPException(status_code=404, detail="Negocio no encontrado")
     ingreso = models.Ingreso(**data.model_dump())
@@ -32,7 +41,11 @@ def crear_ingreso(data: schemas.IngresoCreate, db: Session = Depends(get_db)):
 
 
 @router.get("/egresos", response_model=list[schemas.Egreso])
-def listar_egresos(negocio_id: int | None = None, db: Session = Depends(get_db)):
+def listar_egresos(
+    negocio_id: int | None = None,
+    db: Session = Depends(get_db),
+    _permiso: models.Usuario = Depends(requerir_permiso("finanzas", "ver")),
+):
     query = db.query(models.Egreso)
     if negocio_id is not None:
         query = query.filter(models.Egreso.negocio_id == negocio_id)
@@ -40,7 +53,11 @@ def listar_egresos(negocio_id: int | None = None, db: Session = Depends(get_db))
 
 
 @router.post("/egresos", response_model=schemas.Egreso)
-def crear_egreso(data: schemas.EgresoCreate, db: Session = Depends(get_db)):
+def crear_egreso(
+    data: schemas.EgresoCreate,
+    db: Session = Depends(get_db),
+    _permiso: models.Usuario = Depends(requerir_permiso("finanzas", "editar")),
+):
     if not db.query(models.Negocio).get(data.negocio_id):
         raise HTTPException(status_code=404, detail="Negocio no encontrado")
     egreso = models.Egreso(**data.model_dump())
@@ -52,7 +69,11 @@ def crear_egreso(data: schemas.EgresoCreate, db: Session = Depends(get_db)):
 
 @router.get("/resumen", response_model=list[schemas.ResumenNegocio])
 def resumen(db: Session = Depends(get_db)):
-    """Balance por negocio: el que ya usan todos en el Dashboard."""
+    """
+    Balance por negocio: el que ya usan todos en el Dashboard general.
+    A propósito NO exige permiso de Finanzas — es el resumen que ve
+    cualquier persona logueada en la pantalla principal.
+    """
     resultados = []
     for negocio in db.query(models.Negocio).all():
         total_ingresos = sum(i.monto for i in negocio.ingresos)
@@ -82,13 +103,13 @@ def movimientos_dia(
     fecha: date | None = None,
     negocio_id: int | None = None,
     db: Session = Depends(get_db),
-    _admin: models.Usuario = Depends(requerir_admin),
+    _permiso: models.Usuario = Depends(requerir_permiso("finanzas", "ver")),
 ):
     """
     Todo el movimiento de caja de un día — cada ingreso y egreso, uno por
     uno, con el total y el balance. A diferencia de /resumen (que ve
-    cualquier usuario logueado), esta vista con el detalle completo es
-    exclusiva de administradores.
+    cualquier usuario logueado), esta vista con el detalle completo exige
+    permiso de Finanzas.
     """
     dia = fecha or ahora_peru().date()
     inicio, fin = _rango_del_dia(dia)
@@ -153,6 +174,10 @@ def conciliacion_diaria(
     uno asignado): cuánto vendió, cuántas ventas hizo, y cuántas
     impresiones se registraron a su nombre — para que el encargado de
     caja haga el cuadre con cada persona, stand por stand.
+
+    Nota: esta ruta pertenece al módulo "conciliacion", no a "finanzas"
+    — se deja sin tocar en esta migración, se conecta cuando trabajemos
+    ese módulo.
     """
     dia = fecha or ahora_peru().date()
     inicio, fin = _rango_del_dia(dia)
@@ -238,12 +263,12 @@ def reporte_balance(
     fecha: date | None = None,
     negocio_id: int | None = None,
     db: Session = Depends(get_db),
-    _admin: models.Usuario = Depends(requerir_admin),
+    _permiso: models.Usuario = Depends(requerir_permiso("finanzas", "ver")),
 ):
     """
     Balance de ingresos/egresos para un periodo completo: el día, la
     semana (lunes a domingo), el mes, o el año que contiene la fecha
-    dada (o la de hoy, si no se especifica). Solo administradores.
+    dada (o la de hoy, si no se especifica). Exige permiso de Finanzas.
     """
     referencia = fecha or ahora_peru().date()
 
@@ -309,13 +334,14 @@ def serie_financiera(
     desde: date | None = None,
     hasta: date | None = None,
     db: Session = Depends(get_db),
-    _admin: models.Usuario = Depends(requerir_admin),
+    _permiso: models.Usuario = Depends(requerir_permiso("finanzas", "ver")),
 ):
     """
     Ingresos, egresos, ventas del POS, y facturación/cobros de proyectos
     de la Constructora, agrupados por día, semana, mes o año — para
     tener el control de ingresos y egresos de toda la empresa a lo
-    largo del tiempo, no solo de un periodo puntual. Solo administradores.
+    largo del tiempo, no solo de un periodo puntual. Exige permiso de
+    Finanzas.
     """
     hoy = ahora_peru().date()
     if hasta is None:
@@ -413,13 +439,13 @@ def resumen_comprobantes(
     desde: date | None = None,
     hasta: date | None = None,
     db: Session = Depends(get_db),
-    _admin: models.Usuario = Depends(requerir_admin),
+    _permiso: models.Usuario = Depends(requerir_permiso("finanzas", "ver")),
 ):
     """
     Agrupa ingresos y egresos por tipo de comprobante (factura, boleta,
     sin comprobante...) — para saber cuánto de lo cobrado/pagado tiene
-    respaldo formal. Sin fechas, considera todo el historial. Solo
-    administradores.
+    respaldo formal. Sin fechas, considera todo el historial. Exige
+    permiso de Finanzas.
     """
     query_ingresos = db.query(models.Ingreso)
     query_egresos = db.query(models.Egreso)
