@@ -234,3 +234,59 @@ def revisar_conciliacion(db: Session) -> bool:
         asunto=f"Alerta: {len(filas_data)} discrepancia(s) de conciliación — {dia.isoformat()}",
         cuerpo_html=cuerpo_html,
     )
+
+
+def revisar_stock_bajo(db: Session) -> bool:
+    """
+    Revisa todos los insumos cuyo stock actual ya llegó (o bajó) del
+    stock mínimo configurado. Si hay alguno, manda un correo con el
+    resumen. Devuelve True si mandó correo, False si todo está bien de
+    stock.
+    """
+    insumos = (
+        db.query(models.Insumo)
+        .filter(models.Insumo.stock_actual <= models.Insumo.stock_minimo)
+        .all()
+    )
+    if not insumos:
+        return False
+
+    filas_data = []
+    for i in insumos:
+        negocio = db.query(models.Negocio).get(i.negocio_id)
+        filas_data.append(
+            {
+                "negocio": negocio.nombre if negocio else "—",
+                "insumo": i.nombre,
+                "stock_actual": i.stock_actual,
+                "stock_minimo": i.stock_minimo,
+                "unidad": i.unidad,
+            }
+        )
+    filas_data.sort(key=lambda f: f["stock_actual"] - f["stock_minimo"])
+
+    filas_html = "".join(
+        "<tr>"
+        f"<td>{f['negocio']}</td>"
+        f"<td>{f['insumo']}</td>"
+        f"<td>{f['stock_actual']:.1f} {f['unidad']}</td>"
+        f"<td>{f['stock_minimo']:.1f} {f['unidad']}</td>"
+        "</tr>"
+        for f in filas_data
+    )
+
+    cuerpo_html = f"""
+    <h2>Insumos con stock bajo</h2>
+    <p>{len(filas_data)} insumo(s) ya llegaron o bajaron de su stock mínimo:</p>
+    <table border="1" cellpadding="6" cellspacing="0" style="border-collapse:collapse">
+      <tr>
+        <th>Negocio</th><th>Insumo</th><th>Stock actual</th><th>Stock mínimo</th>
+      </tr>
+      {filas_html}
+    </table>
+    """
+
+    return enviar_alerta(
+        asunto=f"Alerta: {len(filas_data)} insumo(s) con stock bajo",
+        cuerpo_html=cuerpo_html,
+    )

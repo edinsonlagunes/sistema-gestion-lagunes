@@ -252,8 +252,10 @@ class Egreso(Base):
     fecha = Column(DateTime, default=ahora_peru)
     pago_proveedor_id = Column(Integer, ForeignKey("pagos_proveedor.id"), nullable=True)
     tipo_comprobante = Column(String, nullable=True)  # factura, boleta, sin_comprobante...
+    proyecto_id = Column(Integer, ForeignKey("proyectos.id"), nullable=True)  # gasto asignado directo a un proyecto (opcional)
 
     negocio = relationship("Negocio", back_populates="egresos")
+    proyecto = relationship("Proyecto", back_populates="egresos_directos")
 
 
 class PagoProveedor(Base):
@@ -431,6 +433,7 @@ class Proyecto(Base):
     partidas = relationship(
         "Partida", back_populates="proyecto", cascade="all, delete-orphan", order_by="Partida.orden"
     )
+    egresos_directos = relationship("Egreso", back_populates="proyecto")
 
 
 class AmpliacionPlazo(Base):
@@ -747,3 +750,24 @@ class ComprobanteElectronico(Base):
     negocio = relationship("Negocio")
     venta = relationship("Venta")
     pago_proyecto = relationship("PagoProyecto")
+
+
+class RegistroAuditoria(Base):
+    """
+    Quién hizo qué y cuándo, para las acciones sensibles del sistema
+    (dinero, permisos, accesos). No se guarda para absolutamente todo
+    — se enfoca en lo que de verdad importa auditar. Nunca se edita ni
+    se borra una vez creado.
+    """
+    __tablename__ = "registros_auditoria"
+
+    id = Column(Integer, primary_key=True, index=True)
+    usuario_id = Column(Integer, ForeignKey("usuarios.id"), nullable=True)
+    usuario_username = Column(String, nullable=True)  # copia textual, para que sobreviva aunque se borre el usuario
+    accion = Column(String, nullable=False)  # crear, editar, eliminar
+    entidad = Column(String, nullable=False)  # "ingreso", "egreso", "pago_proyecto", "rol", "usuario", etc.
+    entidad_id = Column(Integer, nullable=True)
+    detalle = Column(String, nullable=True)  # descripción legible de qué cambió
+    fecha = Column(DateTime, default=ahora_peru)
+
+    usuario = relationship("Usuario")

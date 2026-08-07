@@ -1,7 +1,12 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
-from app.alertas import revisar_cobros_pendientes, revisar_conciliacion, revisar_documentos_por_vencer
+from app.alertas import (
+    revisar_cobros_pendientes,
+    revisar_conciliacion,
+    revisar_documentos_por_vencer,
+    revisar_stock_bajo,
+)
 from app.auth import requerir_admin
 from app.database import get_db
 from app.email_service import enviar_alerta
@@ -72,5 +77,23 @@ def revisar_conciliacion_ruta(usuario=Depends(requerir_admin), db: Session = Dep
             "Se encontraron discrepancias de conciliación y se envió el correo."
             if enviado
             else "No hay discrepancias de conciliación en el día de ayer — no se envió correo."
+        ),
+    }
+
+
+@router.post("/revisar-stock")
+def revisar_stock(usuario=Depends(requerir_admin), db: Session = Depends(get_db)):
+    """
+    Dispara manualmente la revisión de insumos con stock bajo (la misma
+    que corre sola todos los días). Útil para probarla sin esperar a la
+    hora programada.
+    """
+    enviado = revisar_stock_bajo(db)
+    return {
+        "enviado": enviado,
+        "mensaje": (
+            "Se encontraron insumos con stock bajo y se envió el correo."
+            if enviado
+            else "No hay insumos con stock bajo en este momento — no se envió correo."
         ),
     }

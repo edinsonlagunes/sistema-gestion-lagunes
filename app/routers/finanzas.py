@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app import models, schemas
+from app.auditoria import registrar_auditoria
 from app.auth import obtener_usuario_actual
 from app.database import get_db
 from app.permisos import requerir_permiso
@@ -35,6 +36,11 @@ def crear_ingreso(
         raise HTTPException(status_code=404, detail="Negocio no encontrado")
     ingreso = models.Ingreso(**data.model_dump())
     db.add(ingreso)
+    db.flush()
+    registrar_auditoria(
+        db, _permiso, "crear", "ingreso", ingreso.id,
+        f"S/ {ingreso.monto:.2f} - {ingreso.descripcion or 'sin descripción'}",
+    )
     db.commit()
     db.refresh(ingreso)
     return ingreso
@@ -60,8 +66,15 @@ def crear_egreso(
 ):
     if not db.query(models.Negocio).get(data.negocio_id):
         raise HTTPException(status_code=404, detail="Negocio no encontrado")
+    if data.proyecto_id is not None and not db.query(models.Proyecto).get(data.proyecto_id):
+        raise HTTPException(status_code=404, detail="Proyecto no encontrado")
     egreso = models.Egreso(**data.model_dump())
     db.add(egreso)
+    db.flush()
+    registrar_auditoria(
+        db, _permiso, "crear", "egreso", egreso.id,
+        f"S/ {egreso.monto:.2f} - {egreso.descripcion or egreso.categoria}",
+    )
     db.commit()
     db.refresh(egreso)
     return egreso

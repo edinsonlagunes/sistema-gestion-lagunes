@@ -174,6 +174,14 @@ def migrar_columnas():
         else:
             print("clientes.documento_numero ya existe — nada que hacer.")
 
+        # --- Costo real de proyectos ---
+        if not _tiene_columna(inspector, "egresos", "proyecto_id"):
+            print("Agregando columna proyecto_id a egresos...")
+            conn.execute(text("ALTER TABLE egresos ADD COLUMN proyecto_id INTEGER"))
+            conn.commit()
+        else:
+            print("egresos.proyecto_id ya existe — nada que hacer.")
+
 
 def fix_ingresos_proyecto():
     """

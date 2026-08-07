@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app import models, schemas
+from app.auditoria import registrar_auditoria
 from app.auth import crear_token, requerir_superadmin
 from app.database import get_db
 from app.permisos import permisos_de_usuario, requerir_permiso
@@ -38,6 +39,11 @@ def crear_usuario(
         rol_id=data.rol_id,
     )
     db.add(usuario)
+    db.flush()
+    registrar_auditoria(
+        db, _permiso, "crear", "usuario", usuario.id,
+        f"Acceso creado para '{usuario.username}' (colaborador: {colaborador.nombre})",
+    )
     db.commit()
     db.refresh(usuario)
     return usuario

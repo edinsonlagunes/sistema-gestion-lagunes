@@ -217,6 +217,7 @@ class EgresoCreate(BaseModel):
     monto: float
     descripcion: Optional[str] = None
     tipo_comprobante: Optional[str] = None
+    proyecto_id: Optional[int] = None  # gasto asignado directo a un proyecto (opcional)
 
 
 class Egreso(EgresoCreate):
@@ -537,6 +538,12 @@ class ProyectoDetalle(Proyecto):
     saldo_pendiente: float
     total_horas: float
     porcentaje_presupuesto_ejecutado: Optional[float] = None
+    avance_fisico_real: Optional[float] = None  # % promedio de las partidas de avance de obra
+    costo_mano_obra: float = 0.0  # horas registradas x tarifa del colaborador
+    costo_egresos_directos: float = 0.0  # egresos asignados directo a este proyecto
+    costo_real_total: float = 0.0
+    margen_estimado: float = 0.0  # facturado - costo real
+    facturacion_adelantada_al_avance: Optional[float] = None  # puntos porcentuales: >0 = se factura por delante del avance físico
 
 
 # ---------- Mantenimiento de equipos ----------
@@ -1017,3 +1024,16 @@ class ComprobanteElectronicoOut(BaseModel):
     respuesta_sunat: Optional[str] = None
     venta_id: Optional[int] = None
     pago_proyecto_id: Optional[int] = None
+
+
+# ---------- Auditoría ----------
+class RegistroAuditoriaOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    usuario_id: Optional[int] = None
+    usuario_username: Optional[str] = None
+    accion: str
+    entidad: str
+    entidad_id: Optional[int] = None
+    detalle: Optional[str] = None
+    fecha: datetime

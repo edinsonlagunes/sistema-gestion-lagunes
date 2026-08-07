@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app import models, schemas
+from app.auditoria import registrar_auditoria
 from app.auth import obtener_usuario_actual
 from app.database import get_db
 from app.permisos import requerir_permiso
@@ -15,11 +16,44 @@ router = APIRouter(prefix="/proyectos", tags=["Proyectos (Constructora)"], depen
 ESTADOS_VALIDOS = {"cotizacion", "en_proceso", "entregado", "cancelado"}
 
 
+DIAS_LABORABLES_SEMANA = 6
+HORAS_JORNADA = 8
+
+
+def _valor_hora(colaborador: models.Colaborador | None) -> float:
+    if not colaborador or not colaborador.sueldo_semanal:
+        return 0.0
+    return colaborador.sueldo_semanal / (DIAS_LABORABLES_SEMANA * HORAS_JORNADA)
+
+
 def _a_detalle(proyecto: models.Proyecto) -> schemas.ProyectoDetalle:
     total_facturado = sum(o.subtotal for o in proyecto.ordenes)
     total_pagado = sum(p.monto for p in proyecto.pagos)
     total_horas = sum(r.horas for r in proyecto.registros_tiempo)
     porcentaje = (total_facturado / proyecto.presupuesto * 100) if proyecto.presupuesto else None
+
+    # Avance físico real: promedio del % más reciente de cada partida.
+    avances_partidas = []
+    for partida in proyecto.partidas:
+        if partida.reportes:
+            ultimo = max(partida.reportes, key=lambda r: r.fecha)
+            avances_partidas.append(ultimo.porcentaje_avance)
+    avance_fisico = round(sum(avances_partidas) / len(avances_partidas), 1) if avances_partidas else None
+
+    # Costo real: mano de obra (horas registradas × tarifa del colaborador) + gastos asignados directo al proyecto.
+    costo_mano_obra = round(sum(r.horas * _valor_hora(r.colaborador) for r in proyecto.registros_tiempo), 2)
+    costo_egresos_directos = round(sum(e.monto for e in proyecto.egresos_directos), 2)
+    costo_real_total = round(costo_mano_obra + costo_egresos_directos, 2)
+    margen_estimado = round(total_facturado - costo_real_total, 2)
+
+    # Facturación vs. avance físico: si se ha facturado bastante más de lo
+    # que muestra el avance real, es una señal de alerta (se está cobrando
+    # por adelante del trabajo hecho).
+    facturacion_adelantada = None
+    if avance_fisico is not None and proyecto.presupuesto:
+        porcentaje_facturado_del_presupuesto = (total_facturado / proyecto.presupuesto) * 100
+        facturacion_adelantada = round(porcentaje_facturado_del_presupuesto - avance_fisico, 1)
+
     return schemas.ProyectoDetalle(
         id=proyecto.id,
         negocio_id=proyecto.negocio_id,
@@ -40,6 +74,12 @@ def _a_detalle(proyecto: models.Proyecto) -> schemas.ProyectoDetalle:
         saldo_pendiente=total_facturado - total_pagado,
         total_horas=total_horas,
         porcentaje_presupuesto_ejecutado=porcentaje,
+        avance_fisico_real=avance_fisico,
+        costo_mano_obra=costo_mano_obra,
+        costo_egresos_directos=costo_egresos_directos,
+        costo_real_total=costo_real_total,
+        margen_estimado=margen_estimado,
+        facturacion_adelantada_al_avance=facturacion_adelantada,
     )
 
 
@@ -336,6 +376,11 @@ def registrar_pago(
     db.add(pago)
     db.flush()  # asigna pago.id, para poder vincular el ingreso
 
+    registrar_auditoria(
+        db, _permiso, "crear", "pago_proyecto", pago.id,
+        f"S/ {pago.monto:.2f} ({pago.tipo}) - Proyecto '{proyecto.nombre}'",
+    )
+
     etiquetas_tipo = {"adelanto": "Adelanto", "cuota": "Cuota", "pago_final": "Pago final", "otro": "Pago"}
     db.add(
         models.Ingreso(
@@ -428,6 +473,8 @@ def actualizar_pago(
         ingreso.fecha = pago.fecha_pago
         ingreso.medio_pago = pago.medio_pago
 
+    registrar_auditoria(db, _permiso, "editar", "pago_proyecto", pago.id, f"Ahora S/ {pago.monto:.2f}")
+
     db.commit()
     proyecto = db.query(models.Proyecto).get(proyecto_id)
     return _a_detalle(proyecto)
@@ -449,6 +496,7 @@ def eliminar_pago(
     if not pago:
         raise HTTPException(status_code=404, detail="Pago no encontrado")
 
+    registrar_auditoria(db, _permiso, "eliminar", "pago_proyecto", pago.id, f"S/ {pago.monto:.2f} ({pago.tipo})")
     db.query(models.Ingreso).filter(models.Ingreso.pago_proyecto_id == pago.id).delete()
     db.delete(pago)
     db.commit()

@@ -2,11 +2,17 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.alertas import revisar_cobros_pendientes, revisar_conciliacion, revisar_documentos_por_vencer
+from app.alertas import (
+    revisar_cobros_pendientes,
+    revisar_conciliacion,
+    revisar_documentos_por_vencer,
+    revisar_stock_bajo,
+)
 from app.database import Base, SessionLocal, engine
 from app.routers import (
     agenda,
     asistencia,
+    auditoria_router,
     avance_obra,
     caja,
     caja_chica,
@@ -71,6 +77,7 @@ app.include_router(email.router)
 app.include_router(roles.router)
 app.include_router(avance_obra.router)
 app.include_router(comprobantes.router)
+app.include_router(auditoria_router.router)
 
 
 def _job_documentos_por_vencer():
@@ -97,10 +104,19 @@ def _job_conciliacion():
         db.close()
 
 
+def _job_stock_bajo():
+    db = SessionLocal()
+    try:
+        revisar_stock_bajo(db)
+    finally:
+        db.close()
+
+
 scheduler = BackgroundScheduler(timezone="America/Lima")
 scheduler.add_job(_job_documentos_por_vencer, "cron", hour=7, minute=0)
 scheduler.add_job(_job_cobros_pendientes, "cron", hour=7, minute=5)
 scheduler.add_job(_job_conciliacion, "cron", hour=7, minute=10)
+scheduler.add_job(_job_stock_bajo, "cron", hour=7, minute=15)
 scheduler.start()
 
 
