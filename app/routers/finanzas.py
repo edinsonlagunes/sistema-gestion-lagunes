@@ -168,16 +168,14 @@ def conciliacion_diaria(
     fecha: date | None = None,
     negocio_id: int | None = None,
     db: Session = Depends(get_db),
+    _permiso: models.Usuario = Depends(requerir_permiso("conciliacion", "ver")),
 ):
     """
     El día agrupado por colaborador (con su puesto de trabajo, si tiene
     uno asignado): cuánto vendió, cuántas ventas hizo, y cuántas
     impresiones se registraron a su nombre — para que el encargado de
-    caja haga el cuadre con cada persona, stand por stand.
-
-    Nota: esta ruta pertenece al módulo "conciliacion", no a "finanzas"
-    — se deja sin tocar en esta migración, se conecta cuando trabajemos
-    ese módulo.
+    caja haga el cuadre con cada persona, stand por stand. Exige permiso
+    de Conciliación.
     """
     dia = fecha or ahora_peru().date()
     inicio, fin = _rango_del_dia(dia)

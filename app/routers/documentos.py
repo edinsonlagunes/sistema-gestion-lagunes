@@ -4,8 +4,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app import models, schemas
-from app.auth import obtener_usuario_actual, requerir_admin
+from app.auth import obtener_usuario_actual
 from app.database import get_db
+from app.permisos import requerir_permiso
 from app.zona_horaria import ahora_peru
 
 router = APIRouter(prefix="/documentos", tags=["Documentos"], dependencies=[Depends(obtener_usuario_actual)])
@@ -42,6 +43,7 @@ def listar_documentos(
     tipo: str | None = None,
     estado: str | None = None,
     db: Session = Depends(get_db),
+    _permiso: models.Usuario = Depends(requerir_permiso("documentos", "ver")),
 ):
     query = db.query(models.Documento)
     if negocio_id is not None:
@@ -57,7 +59,12 @@ def listar_documentos(
 
 
 @router.get("/vencimientos-proximos", response_model=list[schemas.DocumentoOut])
-def vencimientos_proximos(dias: int = 30, negocio_id: int | None = None, db: Session = Depends(get_db)):
+def vencimientos_proximos(
+    dias: int = 30,
+    negocio_id: int | None = None,
+    db: Session = Depends(get_db),
+    _permiso: models.Usuario = Depends(requerir_permiso("documentos", "ver")),
+):
     """
     Documentos que vencen dentro de los próximos N días, o que ya
     vencieron — para poder darles seguimiento antes de que se conviertan
@@ -79,9 +86,9 @@ def vencimientos_proximos(dias: int = 30, negocio_id: int | None = None, db: Ses
 def crear_documento(
     data: schemas.DocumentoCreate,
     db: Session = Depends(get_db),
-    _admin: models.Usuario = Depends(requerir_admin),
+    _permiso: models.Usuario = Depends(requerir_permiso("documentos", "editar")),
 ):
-    """Registra un permiso municipal, un documento de archivo técnico, o una licitación. Solo administradores."""
+    """Registra un permiso municipal, un documento de archivo técnico, o una licitación. Exige permiso de Documentos."""
     if not db.query(models.Negocio).get(data.negocio_id):
         raise HTTPException(status_code=404, detail="Negocio no encontrado")
     if data.tipo not in TIPOS_VALIDOS:
@@ -97,7 +104,11 @@ def crear_documento(
 
 
 @router.get("/{documento_id}", response_model=schemas.DocumentoOut)
-def obtener_documento(documento_id: int, db: Session = Depends(get_db)):
+def obtener_documento(
+    documento_id: int,
+    db: Session = Depends(get_db),
+    _permiso: models.Usuario = Depends(requerir_permiso("documentos", "ver")),
+):
     documento = db.query(models.Documento).get(documento_id)
     if not documento:
         raise HTTPException(status_code=404, detail="Documento no encontrado")
@@ -109,9 +120,9 @@ def actualizar_documento(
     documento_id: int,
     data: schemas.DocumentoUpdate,
     db: Session = Depends(get_db),
-    _admin: models.Usuario = Depends(requerir_admin),
+    _permiso: models.Usuario = Depends(requerir_permiso("documentos", "editar")),
 ):
-    """Edita un documento (ej. renovar su fecha de vencimiento, cambiar su estado). Solo administradores."""
+    """Edita un documento (ej. renovar su fecha de vencimiento, cambiar su estado). Exige permiso de Documentos."""
     documento = db.query(models.Documento).get(documento_id)
     if not documento:
         raise HTTPException(status_code=404, detail="Documento no encontrado")
@@ -132,7 +143,7 @@ def actualizar_documento(
 def eliminar_documento(
     documento_id: int,
     db: Session = Depends(get_db),
-    _admin: models.Usuario = Depends(requerir_admin),
+    _permiso: models.Usuario = Depends(requerir_permiso("documentos", "editar")),
 ):
     documento = db.query(models.Documento).get(documento_id)
     if not documento:

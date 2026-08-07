@@ -4,8 +4,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app import models, schemas
-from app.auth import obtener_usuario_actual, requerir_admin
+from app.auth import obtener_usuario_actual
 from app.database import get_db
+from app.permisos import requerir_permiso
 from app.zona_horaria import ahora_peru
 
 router = APIRouter(prefix="/proyectos", tags=["Proyectos (Constructora)"], dependencies=[Depends(obtener_usuario_actual)])
@@ -47,6 +48,7 @@ def listar_proyectos(
     cliente_id: int | None = None,
     estado: str | None = None,
     db: Session = Depends(get_db),
+    _permiso: models.Usuario = Depends(requerir_permiso("proyectos", "ver")),
 ):
     query = db.query(models.Proyecto)
     if negocio_id is not None:
@@ -59,7 +61,11 @@ def listar_proyectos(
 
 
 @router.post("/", response_model=schemas.Proyecto)
-def crear_proyecto(data: schemas.ProyectoCreate, db: Session = Depends(get_db)):
+def crear_proyecto(
+    data: schemas.ProyectoCreate,
+    db: Session = Depends(get_db),
+    _permiso: models.Usuario = Depends(requerir_permiso("proyectos", "editar")),
+):
     if not db.query(models.Negocio).get(data.negocio_id):
         raise HTTPException(status_code=404, detail="Negocio no encontrado")
     if not db.query(models.Cliente).get(data.cliente_id):
@@ -75,7 +81,11 @@ def crear_proyecto(data: schemas.ProyectoCreate, db: Session = Depends(get_db)):
 
 
 @router.get("/resumen-pagos", response_model=list[schemas.ResumenPagoProyecto])
-def resumen_pagos(negocio_id: int | None = None, db: Session = Depends(get_db)):
+def resumen_pagos(
+    negocio_id: int | None = None,
+    db: Session = Depends(get_db),
+    _permiso: models.Usuario = Depends(requerir_permiso("proyectos", "ver")),
+):
     """
     Para el Dashboard: por cada proyecto, cuánto se ha facturado, cuánto
     se ha cobrado, cuánto falta, y cuándo fue el último pago (el adelanto,
@@ -115,7 +125,11 @@ def resumen_pagos(negocio_id: int | None = None, db: Session = Depends(get_db)):
 
 
 @router.get("/{proyecto_id}", response_model=schemas.ProyectoDetalle)
-def obtener_proyecto(proyecto_id: int, db: Session = Depends(get_db)):
+def obtener_proyecto(
+    proyecto_id: int,
+    db: Session = Depends(get_db),
+    _permiso: models.Usuario = Depends(requerir_permiso("proyectos", "ver")),
+):
     proyecto = db.query(models.Proyecto).get(proyecto_id)
     if not proyecto:
         raise HTTPException(status_code=404, detail="Proyecto no encontrado")
@@ -123,7 +137,12 @@ def obtener_proyecto(proyecto_id: int, db: Session = Depends(get_db)):
 
 
 @router.patch("/{proyecto_id}/estado", response_model=schemas.Proyecto)
-def cambiar_estado(proyecto_id: int, data: schemas.ProyectoEstadoUpdate, db: Session = Depends(get_db)):
+def cambiar_estado(
+    proyecto_id: int,
+    data: schemas.ProyectoEstadoUpdate,
+    db: Session = Depends(get_db),
+    _permiso: models.Usuario = Depends(requerir_permiso("proyectos", "editar")),
+):
     proyecto = db.query(models.Proyecto).get(proyecto_id)
     if not proyecto:
         raise HTTPException(status_code=404, detail="Proyecto no encontrado")
@@ -141,11 +160,11 @@ def actualizar_proyecto(
     proyecto_id: int,
     data: schemas.ProyectoUpdate,
     db: Session = Depends(get_db),
-    _admin: models.Usuario = Depends(requerir_admin),
+    _permiso: models.Usuario = Depends(requerir_permiso("proyectos", "editar")),
 ):
     """
     Editar los datos generales del proyecto (nombre, tipo, cliente, fecha
-    estimada de entrega). Solo un administrador puede hacerlo — el estado
+    estimada de entrega). Exige permiso de Proyectos — el estado
     (cotización/en proceso/etc.) se sigue manejando aparte, con
     PATCH /proyectos/{id}/estado.
     """
@@ -167,7 +186,10 @@ def actualizar_proyecto(
 
 @router.post("/{proyecto_id}/ordenes", response_model=schemas.ProyectoDetalle)
 def registrar_orden_servicio(
-    proyecto_id: int, data: schemas.OrdenServicioCreate, db: Session = Depends(get_db)
+    proyecto_id: int,
+    data: schemas.OrdenServicioCreate,
+    db: Session = Depends(get_db),
+    _permiso: models.Usuario = Depends(requerir_permiso("proyectos", "editar")),
 ):
     """
     Registra un servicio técnico entregado dentro del proyecto (un plano,
@@ -175,7 +197,8 @@ def registrar_orden_servicio(
     subtotal con el precio vigente del catálogo (eso es lo FACTURADO) y
     descuenta el insumo vinculado si lo tiene. NO genera ingreso — eso
     solo pasa cuando se registra un pago real (ver /pagos), para no
-    contar como cobrado algo que todavía no llegó.
+    contar como cobrado algo que todavía no llegó. Exige permiso de
+    Proyectos.
     """
     proyecto = db.query(models.Proyecto).get(proyecto_id)
     if not proyecto:
@@ -215,15 +238,15 @@ def actualizar_orden_servicio(
     orden_id: int,
     data: schemas.OrdenServicioUpdate,
     db: Session = Depends(get_db),
-    _admin: models.Usuario = Depends(requerir_admin),
+    _permiso: models.Usuario = Depends(requerir_permiso("proyectos", "editar")),
 ):
     """
     Corrige la cantidad de un servicio ya registrado en el proyecto (por
     ejemplo, si se anotaron mal los m² de un ploteo). Recalcula el
     subtotal (lo facturado) con el precio que se usó en su momento, y
     corrige el stock del insumo vinculado por la diferencia. No toca
-    ingresos — esos van aparte, ligados a los pagos reales. Solo
-    administradores.
+    ingresos — esos van aparte, ligados a los pagos reales. Exige
+    permiso de Proyectos.
     """
     orden = (
         db.query(models.OrdenServicio)
@@ -255,12 +278,12 @@ def eliminar_orden_servicio(
     proyecto_id: int,
     orden_id: int,
     db: Session = Depends(get_db),
-    _admin: models.Usuario = Depends(requerir_admin),
+    _permiso: models.Usuario = Depends(requerir_permiso("proyectos", "editar")),
 ):
     """
     Quita un servicio que se había registrado por error en el proyecto:
     baja lo facturado y devuelve el insumo consumido al stock. No toca
-    ingresos. Solo administradores.
+    ingresos. Exige permiso de Proyectos.
     """
     orden = (
         db.query(models.OrdenServicio)
@@ -288,14 +311,14 @@ def registrar_pago(
     proyecto_id: int,
     data: schemas.PagoProyectoCreate,
     db: Session = Depends(get_db),
-    _admin: models.Usuario = Depends(requerir_admin),
+    _permiso: models.Usuario = Depends(requerir_permiso("proyectos", "editar")),
 ):
     """
     Registra un pago recibido contra el proyecto — el adelanto inicial,
     una cuota, o el pago final. Esto SÍ genera el ingreso en finanzas
     (por el monto realmente cobrado, con su fecha y medio de pago real)
     — a diferencia de facturar una orden, que no mueve caja todavía.
-    Solo administradores.
+    Exige permiso de Proyectos.
     """
     proyecto = db.query(models.Proyecto).get(proyecto_id)
     if not proyecto:
@@ -336,9 +359,9 @@ def actualizar_pago(
     pago_id: int,
     data: schemas.PagoProyectoUpdate,
     db: Session = Depends(get_db),
-    _admin: models.Usuario = Depends(requerir_admin),
+    _permiso: models.Usuario = Depends(requerir_permiso("proyectos", "editar")),
 ):
-    """Corrige un pago ya registrado (monto, fecha, tipo) y su ingreso vinculado. Solo administradores."""
+    """Corrige un pago ya registrado (monto, fecha, tipo) y su ingreso vinculado. Exige permiso de Proyectos."""
     pago = (
         db.query(models.PagoProyecto)
         .filter(models.PagoProyecto.id == pago_id, models.PagoProyecto.proyecto_id == proyecto_id)
@@ -366,9 +389,9 @@ def eliminar_pago(
     proyecto_id: int,
     pago_id: int,
     db: Session = Depends(get_db),
-    _admin: models.Usuario = Depends(requerir_admin),
+    _permiso: models.Usuario = Depends(requerir_permiso("proyectos", "editar")),
 ):
-    """Quita un pago registrado por error, junto con el ingreso que había generado. Solo administradores."""
+    """Quita un pago registrado por error, junto con el ingreso que había generado. Exige permiso de Proyectos."""
     pago = (
         db.query(models.PagoProyecto)
         .filter(models.PagoProyecto.id == pago_id, models.PagoProyecto.proyecto_id == proyecto_id)
@@ -391,9 +414,9 @@ def crear_contrato(
     proyecto_id: int,
     data: schemas.ContratoCreate,
     db: Session = Depends(get_db),
-    _admin: models.Usuario = Depends(requerir_admin),
+    _permiso: models.Usuario = Depends(requerir_permiso("proyectos", "editar")),
 ):
-    """Registra un contrato (o adenda) del proyecto. Solo administradores."""
+    """Registra un contrato (o adenda) del proyecto. Exige permiso de Proyectos."""
     proyecto = db.query(models.Proyecto).get(proyecto_id)
     if not proyecto:
         raise HTTPException(status_code=404, detail="Proyecto no encontrado")
@@ -411,9 +434,9 @@ def actualizar_contrato(
     contrato_id: int,
     data: schemas.ContratoUpdate,
     db: Session = Depends(get_db),
-    _admin: models.Usuario = Depends(requerir_admin),
+    _permiso: models.Usuario = Depends(requerir_permiso("proyectos", "editar")),
 ):
-    """Edita un contrato (ej. cambiar su estado a finalizado). Solo administradores."""
+    """Edita un contrato (ej. cambiar su estado a finalizado). Exige permiso de Proyectos."""
     contrato = (
         db.query(models.Contrato)
         .filter(models.Contrato.id == contrato_id, models.Contrato.proyecto_id == proyecto_id)
@@ -435,9 +458,9 @@ def eliminar_contrato(
     proyecto_id: int,
     contrato_id: int,
     db: Session = Depends(get_db),
-    _admin: models.Usuario = Depends(requerir_admin),
+    _permiso: models.Usuario = Depends(requerir_permiso("proyectos", "editar")),
 ):
-    """Quita un contrato registrado por error. Solo administradores."""
+    """Quita un contrato registrado por error. Exige permiso de Proyectos."""
     contrato = (
         db.query(models.Contrato)
         .filter(models.Contrato.id == contrato_id, models.Contrato.proyecto_id == proyecto_id)
@@ -459,13 +482,13 @@ def registrar_ampliacion(
     proyecto_id: int,
     data: schemas.AmpliacionPlazoCreate,
     db: Session = Depends(get_db),
-    _admin: models.Usuario = Depends(requerir_admin),
+    _permiso: models.Usuario = Depends(requerir_permiso("proyectos", "editar")),
 ):
     """
     Registra una ampliación (extensión) del plazo de entrega: guarda la
     fecha anterior y el motivo, y actualiza la fecha de entrega estimada
     del proyecto a la nueva. Así queda el historial completo de cada vez
-    que se extendió, no solo la fecha vigente. Solo administradores.
+    que se extendió, no solo la fecha vigente. Exige permiso de Proyectos.
     """
     proyecto = db.query(models.Proyecto).get(proyecto_id)
     if not proyecto:
@@ -490,12 +513,12 @@ def eliminar_ampliacion(
     proyecto_id: int,
     ampliacion_id: int,
     db: Session = Depends(get_db),
-    _admin: models.Usuario = Depends(requerir_admin),
+    _permiso: models.Usuario = Depends(requerir_permiso("proyectos", "editar")),
 ):
     """
     Quita un registro de ampliación mal anotado. No recalcula la fecha
     de entrega vigente del proyecto (si hace falta corregirla, edítala
-    directo con PATCH /proyectos/{id}). Solo administradores.
+    directo con PATCH /proyectos/{id}). Exige permiso de Proyectos.
     """
     ampliacion = (
         db.query(models.AmpliacionPlazo)
@@ -521,8 +544,10 @@ def registrar_tiempo(
 ):
     """
     Registra horas dedicadas al proyecto por un colaborador, en una
-    fecha dada. Cualquier usuario logueado puede anotar su propio
-    tiempo (o el de otro colaborador, si lleva el control por todos).
+    fecha dada. A propósito NO exige permiso de Proyectos — cualquier
+    usuario logueado puede anotar su propio tiempo (o el de otro
+    colaborador, si lleva el control por todos), igual que fichar
+    asistencia.
     """
     proyecto = db.query(models.Proyecto).get(proyecto_id)
     if not proyecto:
@@ -548,9 +573,9 @@ def eliminar_tiempo(
     proyecto_id: int,
     registro_id: int,
     db: Session = Depends(get_db),
-    _admin: models.Usuario = Depends(requerir_admin),
+    _permiso: models.Usuario = Depends(requerir_permiso("proyectos", "editar")),
 ):
-    """Quita un registro de tiempo mal anotado. Solo administradores (para no alterar el historial sin control)."""
+    """Quita un registro de tiempo mal anotado. Exige permiso de Proyectos (para no alterar el historial sin control)."""
     registro = (
         db.query(models.RegistroTiempo)
         .filter(models.RegistroTiempo.id == registro_id, models.RegistroTiempo.proyecto_id == proyecto_id)
