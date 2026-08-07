@@ -4,8 +4,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app import models, schemas
-from app.auth import obtener_usuario_actual, requerir_admin
+from app.auth import obtener_usuario_actual
 from app.database import get_db
+from app.permisos import requerir_permiso
 from app.zona_horaria import ahora_peru
 
 router = APIRouter(prefix="/planillas", tags=["Planillas"], dependencies=[Depends(obtener_usuario_actual)])
@@ -56,7 +57,11 @@ def _a_detalle(planilla: models.Planilla) -> schemas.PlanillaDetalle:
 
 
 @router.get("/", response_model=list[schemas.PlanillaOut])
-def listar_planillas(negocio_id: int | None = None, db: Session = Depends(get_db)):
+def listar_planillas(
+    negocio_id: int | None = None,
+    db: Session = Depends(get_db),
+    _permiso: models.Usuario = Depends(requerir_permiso("planillas", "ver")),
+):
     query = db.query(models.Planilla)
     if negocio_id is not None:
         query = query.filter(models.Planilla.negocio_id == negocio_id)
@@ -67,15 +72,16 @@ def listar_planillas(negocio_id: int | None = None, db: Session = Depends(get_db
 def generar_planilla(
     data: schemas.PlanillaGenerar,
     db: Session = Depends(get_db),
-    _admin: models.Usuario = Depends(requerir_admin),
+    _permiso: models.Usuario = Depends(requerir_permiso("planillas", "editar")),
 ):
     """
     Genera el borrador de la planilla semanal: por cada colaborador
     activo con sueldo asignado, calcula automáticamente sus faltas
     (días laborables sin asistencia registrada, lunes a sábado) y
     tardanzas (minutos de diferencia contra su hora de entrada
-    esperada, si la tiene configurada). El admin revisa y puede ajustar
-    antes de pagar — nada se descuenta todavía en este paso.
+    esperada, si la tiene configurada). Se revisa y puede ajustar
+    antes de pagar — nada se descuenta todavía en este paso. Exige
+    permiso de Planillas.
     """
     if not db.query(models.Negocio).get(data.negocio_id):
         raise HTTPException(status_code=404, detail="Negocio no encontrado")
@@ -153,7 +159,11 @@ def generar_planilla(
 
 
 @router.get("/{planilla_id}", response_model=schemas.PlanillaDetalle)
-def obtener_planilla(planilla_id: int, db: Session = Depends(get_db)):
+def obtener_planilla(
+    planilla_id: int,
+    db: Session = Depends(get_db),
+    _permiso: models.Usuario = Depends(requerir_permiso("planillas", "ver")),
+):
     planilla = db.query(models.Planilla).get(planilla_id)
     if not planilla:
         raise HTTPException(status_code=404, detail="Planilla no encontrada")
@@ -166,9 +176,9 @@ def ajustar_detalle(
     detalle_id: int,
     data: schemas.DetallePlanillaUpdate,
     db: Session = Depends(get_db),
-    _admin: models.Usuario = Depends(requerir_admin),
+    _permiso: models.Usuario = Depends(requerir_permiso("planillas", "editar")),
 ):
-    """Ajusta un detalle antes de pagar (ej. agregar otro descuento). Solo administradores."""
+    """Ajusta un detalle antes de pagar (ej. agregar otro descuento). Exige permiso de Planillas."""
     planilla = db.query(models.Planilla).get(planilla_id)
     if not planilla:
         raise HTTPException(status_code=404, detail="Planilla no encontrada")
@@ -195,12 +205,12 @@ def ajustar_detalle(
 def pagar_planilla(
     planilla_id: int,
     db: Session = Depends(get_db),
-    _admin: models.Usuario = Depends(requerir_admin),
+    _permiso: models.Usuario = Depends(requerir_permiso("planillas", "editar")),
 ):
     """
     Marca la planilla como pagada y genera el egreso en finanzas por el
     total neto (ya con los descuentos aplicados). Una vez pagada, ya no
-    se puede editar. Solo administradores.
+    se puede editar. Exige permiso de Planillas.
     """
     planilla = db.query(models.Planilla).get(planilla_id)
     if not planilla:
@@ -237,9 +247,9 @@ def pagar_planilla(
 def eliminar_planilla(
     planilla_id: int,
     db: Session = Depends(get_db),
-    _admin: models.Usuario = Depends(requerir_admin),
+    _permiso: models.Usuario = Depends(requerir_permiso("planillas", "editar")),
 ):
-    """Elimina un borrador de planilla (no se puede eliminar una ya pagada). Solo administradores."""
+    """Elimina un borrador de planilla (no se puede eliminar una ya pagada). Exige permiso de Planillas."""
     planilla = db.query(models.Planilla).get(planilla_id)
     if not planilla:
         raise HTTPException(status_code=404, detail="Planilla no encontrada")

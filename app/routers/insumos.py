@@ -5,8 +5,9 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from app import models, schemas
-from app.auth import obtener_usuario_actual, requerir_admin
+from app.auth import obtener_usuario_actual
 from app.database import get_db
+from app.permisos import requerir_permiso
 from app.zona_horaria import ahora_peru
 
 router = APIRouter(prefix="/insumos", tags=["Insumos"], dependencies=[Depends(obtener_usuario_actual)])
@@ -16,7 +17,11 @@ proveedores_router = APIRouter(
 
 
 @router.get("/", response_model=list[schemas.Insumo])
-def listar_insumos(negocio_id: int | None = None, db: Session = Depends(get_db)):
+def listar_insumos(
+    negocio_id: int | None = None,
+    db: Session = Depends(get_db),
+    _permiso: models.Usuario = Depends(requerir_permiso("compras", "ver")),
+):
     query = db.query(models.Insumo)
     if negocio_id is not None:
         query = query.filter(models.Insumo.negocio_id == negocio_id)
@@ -24,7 +29,11 @@ def listar_insumos(negocio_id: int | None = None, db: Session = Depends(get_db))
 
 
 @router.post("/", response_model=schemas.Insumo)
-def crear_insumo(data: schemas.InsumoCreate, db: Session = Depends(get_db)):
+def crear_insumo(
+    data: schemas.InsumoCreate,
+    db: Session = Depends(get_db),
+    _permiso: models.Usuario = Depends(requerir_permiso("compras", "editar")),
+):
     if not db.query(models.Negocio).get(data.negocio_id):
         raise HTTPException(status_code=404, detail="Negocio no encontrado")
     insumo = models.Insumo(**data.model_dump())
@@ -39,9 +48,9 @@ def editar_insumo(
     insumo_id: int,
     data: schemas.InsumoUpdate,
     db: Session = Depends(get_db),
-    _admin: models.Usuario = Depends(requerir_admin),
+    _permiso: models.Usuario = Depends(requerir_permiso("compras", "editar")),
 ):
-    """Edita un insumo — incluye corregir el stock a mano tras un conteo físico. Solo administradores."""
+    """Edita un insumo — incluye corregir el stock a mano tras un conteo físico. Exige permiso de Compras."""
     insumo = db.query(models.Insumo).get(insumo_id)
     if not insumo:
         raise HTTPException(status_code=404, detail="Insumo no encontrado")
@@ -56,9 +65,9 @@ def editar_insumo(
 def eliminar_insumo(
     insumo_id: int,
     db: Session = Depends(get_db),
-    _admin: models.Usuario = Depends(requerir_admin),
+    _permiso: models.Usuario = Depends(requerir_permiso("compras", "editar")),
 ):
-    """Quita un insumo del catálogo. Bloqueado si tiene compras registradas. Solo administradores."""
+    """Quita un insumo del catálogo. Bloqueado si tiene compras registradas. Exige permiso de Compras."""
     insumo = db.query(models.Insumo).get(insumo_id)
     if not insumo:
         raise HTTPException(status_code=404, detail="Insumo no encontrado")
@@ -73,12 +82,19 @@ def eliminar_insumo(
 
 
 @proveedores_router.get("/", response_model=list[schemas.Proveedor])
-def listar_proveedores(db: Session = Depends(get_db)):
+def listar_proveedores(
+    db: Session = Depends(get_db),
+    _permiso: models.Usuario = Depends(requerir_permiso("compras", "ver")),
+):
     return db.query(models.Proveedor).all()
 
 
 @proveedores_router.post("/", response_model=schemas.Proveedor)
-def crear_proveedor(data: schemas.ProveedorCreate, db: Session = Depends(get_db)):
+def crear_proveedor(
+    data: schemas.ProveedorCreate,
+    db: Session = Depends(get_db),
+    _permiso: models.Usuario = Depends(requerir_permiso("compras", "editar")),
+):
     proveedor = models.Proveedor(**data.model_dump())
     db.add(proveedor)
     db.commit()
@@ -91,9 +107,9 @@ def editar_proveedor(
     proveedor_id: int,
     data: schemas.ProveedorUpdate,
     db: Session = Depends(get_db),
-    _admin: models.Usuario = Depends(requerir_admin),
+    _permiso: models.Usuario = Depends(requerir_permiso("compras", "editar")),
 ):
-    """Edita los datos de un proveedor. Solo administradores."""
+    """Edita los datos de un proveedor. Exige permiso de Compras."""
     proveedor = db.query(models.Proveedor).get(proveedor_id)
     if not proveedor:
         raise HTTPException(status_code=404, detail="Proveedor no encontrado")
@@ -108,13 +124,13 @@ def editar_proveedor(
 def eliminar_proveedor(
     proveedor_id: int,
     db: Session = Depends(get_db),
-    _admin: models.Usuario = Depends(requerir_admin),
+    _permiso: models.Usuario = Depends(requerir_permiso("compras", "editar")),
 ):
     """
     Quita un proveedor del catálogo. Bloqueado si tiene compras o pagos
     registrados — esos son historial financiero real y no se pueden
     perder solo porque se quiere quitar el proveedor de la lista.
-    Solo administradores.
+    Exige permiso de Compras.
     """
     proveedor = db.query(models.Proveedor).get(proveedor_id)
     if not proveedor:
@@ -134,12 +150,12 @@ def eliminar_proveedor(
 def importar_proveedores(
     items: list[schemas.ProveedorImportarItem],
     db: Session = Depends(get_db),
-    _admin: models.Usuario = Depends(requerir_admin),
+    _permiso: models.Usuario = Depends(requerir_permiso("compras", "editar")),
 ):
     """
     Crea proveedores en bloque (desde un Excel/CSV ya parseado en el
     frontend). Omite los que coincidan por nombre exacto con uno que ya
-    existe, para no duplicar. Solo administradores.
+    existe, para no duplicar. Exige permiso de Compras.
     """
     existentes = {p.nombre.strip().lower() for p in db.query(models.Proveedor).all()}
     creados = []
@@ -165,7 +181,10 @@ def importar_proveedores(
 
 
 @proveedores_router.get("/exportar-word")
-def exportar_proveedores_word(db: Session = Depends(get_db)):
+def exportar_proveedores_word(
+    db: Session = Depends(get_db),
+    _permiso: models.Usuario = Depends(requerir_permiso("compras", "ver")),
+):
     """
     Genera un documento Word con la lista de proveedores (nombre,
     teléfono, dirección, contacto) — para imprimir o compartir fuera
@@ -223,7 +242,11 @@ def _totales_proveedor(proveedor: models.Proveedor, negocio_id: int | None = Non
 
 
 @proveedores_router.get("/resumen-pagos", response_model=list[schemas.ResumenPagoProveedor])
-def resumen_pagos_proveedores(negocio_id: int | None = None, db: Session = Depends(get_db)):
+def resumen_pagos_proveedores(
+    negocio_id: int | None = None,
+    db: Session = Depends(get_db),
+    _permiso: models.Usuario = Depends(requerir_permiso("compras", "ver")),
+):
     """
     Para el Dashboard: cuentas por pagar — por cada proveedor, cuánto se
     le ha comprado, cuánto se le ha pagado, y cuánto falta. Solo incluye
@@ -256,7 +279,11 @@ def resumen_pagos_proveedores(negocio_id: int | None = None, db: Session = Depen
 
 
 @proveedores_router.get("/{proveedor_id}", response_model=schemas.ProveedorDetalle)
-def obtener_proveedor(proveedor_id: int, db: Session = Depends(get_db)):
+def obtener_proveedor(
+    proveedor_id: int,
+    db: Session = Depends(get_db),
+    _permiso: models.Usuario = Depends(requerir_permiso("compras", "ver")),
+):
     proveedor = db.query(models.Proveedor).get(proveedor_id)
     if not proveedor:
         raise HTTPException(status_code=404, detail="Proveedor no encontrado")
@@ -278,12 +305,12 @@ def registrar_pago_proveedor(
     data: schemas.PagoProveedorCreate,
     negocio_id: int,
     db: Session = Depends(get_db),
-    _admin: models.Usuario = Depends(requerir_admin),
+    _permiso: models.Usuario = Depends(requerir_permiso("compras", "editar")),
 ):
     """
     Registra un pago real a un proveedor — genera el egreso en finanzas
     por el monto efectivamente pagado (a diferencia de comprar, que no
-    mueve caja todavía). Solo administradores.
+    mueve caja todavía). Exige permiso de Compras.
     """
     proveedor = db.query(models.Proveedor).get(proveedor_id)
     if not proveedor:
@@ -334,9 +361,9 @@ def actualizar_pago_proveedor(
     pago_id: int,
     data: schemas.PagoProveedorUpdate,
     db: Session = Depends(get_db),
-    _admin: models.Usuario = Depends(requerir_admin),
+    _permiso: models.Usuario = Depends(requerir_permiso("compras", "editar")),
 ):
-    """Corrige un pago a proveedor ya registrado y su egreso vinculado. Solo administradores."""
+    """Corrige un pago a proveedor ya registrado y su egreso vinculado. Exige permiso de Compras."""
     pago = (
         db.query(models.PagoProveedor)
         .filter(models.PagoProveedor.id == pago_id, models.PagoProveedor.proveedor_id == proveedor_id)
@@ -372,9 +399,9 @@ def eliminar_pago_proveedor(
     proveedor_id: int,
     pago_id: int,
     db: Session = Depends(get_db),
-    _admin: models.Usuario = Depends(requerir_admin),
+    _permiso: models.Usuario = Depends(requerir_permiso("compras", "editar")),
 ):
-    """Quita un pago a proveedor registrado por error, junto con su egreso. Solo administradores."""
+    """Quita un pago a proveedor registrado por error, junto con su egreso. Exige permiso de Compras."""
     pago = (
         db.query(models.PagoProveedor)
         .filter(models.PagoProveedor.id == pago_id, models.PagoProveedor.proveedor_id == proveedor_id)

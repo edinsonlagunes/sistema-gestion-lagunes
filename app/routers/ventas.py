@@ -2,8 +2,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app import models, schemas
-from app.auth import obtener_usuario_actual, requerir_admin
+from app.auth import obtener_usuario_actual
 from app.database import get_db
+from app.permisos import requerir_permiso
 
 router = APIRouter(prefix="/ventas", tags=["Ventas (POS)"], dependencies=[Depends(obtener_usuario_actual)])
 
@@ -13,6 +14,7 @@ def listar_ventas(
     negocio_id: int | None = None,
     caja_sesion_id: int | None = None,
     db: Session = Depends(get_db),
+    _permiso: models.Usuario = Depends(requerir_permiso("ventas_impresiones", "ver")),
 ):
     query = db.query(models.Venta)
     if negocio_id is not None:
@@ -23,7 +25,11 @@ def listar_ventas(
 
 
 @router.post("/", response_model=schemas.Venta)
-def registrar_venta(data: schemas.VentaCreate, db: Session = Depends(get_db)):
+def registrar_venta(
+    data: schemas.VentaCreate,
+    db: Session = Depends(get_db),
+    _permiso: models.Usuario = Depends(requerir_permiso("ventas_impresiones", "editar")),
+):
     """
     Registra una venta con uno o más ítems del catálogo.
 
@@ -32,7 +38,7 @@ def registrar_venta(data: schemas.VentaCreate, db: Session = Depends(get_db)):
     2. Genera el ingreso correspondiente en finanzas.
     3. Descuenta el stock de cualquier insumo vinculado a los servicios vendidos
        (por ejemplo, "Impresión A4 B/N" descuenta hojas de papel bond).
-    Requiere una caja abierta para el negocio.
+    Requiere una caja abierta para el negocio. Exige permiso de Ventas/Impresiones.
     """
     if not data.items:
         raise HTTPException(status_code=400, detail="La venta necesita al menos un ítem")
@@ -101,12 +107,12 @@ def registrar_venta(data: schemas.VentaCreate, db: Session = Depends(get_db)):
 def eliminar_venta(
     venta_id: int,
     db: Session = Depends(get_db),
-    _admin: models.Usuario = Depends(requerir_admin),
+    _permiso: models.Usuario = Depends(requerir_permiso("ventas_impresiones", "editar")),
 ):
     """
     Quita una venta registrada por error: revierte el ingreso que había
     generado y devuelve al stock cualquier insumo que se hubiera
-    descontado. Solo administradores.
+    descontado. Exige permiso de Ventas/Impresiones.
     """
     venta = db.query(models.Venta).get(venta_id)
     if not venta:

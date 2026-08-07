@@ -4,8 +4,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app import models, schemas
-from app.auth import obtener_usuario_actual, requerir_admin
+from app.auth import obtener_usuario_actual
 from app.database import get_db
+from app.permisos import requerir_permiso
 from app.zona_horaria import ahora_peru
 
 router = APIRouter(tags=["Mantenimiento de equipos"], dependencies=[Depends(obtener_usuario_actual)])
@@ -30,7 +31,11 @@ def _a_schema(m: models.Mantenimiento) -> schemas.MantenimientoOut:
 
 
 @router.get("/mantenimientos/proximos", response_model=list[schemas.MantenimientoOut])
-def mantenimientos_proximos(dias: int = 30, db: Session = Depends(get_db)):
+def mantenimientos_proximos(
+    dias: int = 30,
+    db: Session = Depends(get_db),
+    _permiso: models.Usuario = Depends(requerir_permiso("mantenimientos", "ver")),
+):
     """Mantenimientos programados dentro de los próximos N días, o ya vencidos."""
     limite = ahora_peru().date() + timedelta(days=dias)
     mantenimientos = (
@@ -42,7 +47,11 @@ def mantenimientos_proximos(dias: int = 30, db: Session = Depends(get_db)):
 
 
 @router.get("/equipos/{equipo_id}/mantenimientos", response_model=list[schemas.MantenimientoOut])
-def listar_mantenimientos(equipo_id: int, db: Session = Depends(get_db)):
+def listar_mantenimientos(
+    equipo_id: int,
+    db: Session = Depends(get_db),
+    _permiso: models.Usuario = Depends(requerir_permiso("mantenimientos", "ver")),
+):
     equipo = db.query(models.Equipo).get(equipo_id)
     if not equipo:
         raise HTTPException(status_code=404, detail="Equipo no encontrado")
@@ -54,12 +63,12 @@ def registrar_mantenimiento(
     equipo_id: int,
     data: schemas.MantenimientoCreate,
     db: Session = Depends(get_db),
-    _admin: models.Usuario = Depends(requerir_admin),
+    _permiso: models.Usuario = Depends(requerir_permiso("mantenimientos", "editar")),
 ):
     """
     Registra un mantenimiento (preventivo o correctivo) de un equipo, y
     de paso puede programar el próximo. Si tuvo costo y se asume pagado
-    al momento, genera el egreso real. Solo administradores.
+    al momento, genera el egreso real. Exige permiso de Mantenimientos.
     """
     equipo = db.query(models.Equipo).get(equipo_id)
     if not equipo:
@@ -100,9 +109,9 @@ def actualizar_mantenimiento(
     mantenimiento_id: int,
     data: schemas.MantenimientoUpdate,
     db: Session = Depends(get_db),
-    _admin: models.Usuario = Depends(requerir_admin),
+    _permiso: models.Usuario = Depends(requerir_permiso("mantenimientos", "editar")),
 ):
-    """Edita un mantenimiento (ej. reprogramar el próximo). Solo administradores."""
+    """Edita un mantenimiento (ej. reprogramar el próximo). Exige permiso de Mantenimientos."""
     mantenimiento = (
         db.query(models.Mantenimiento)
         .filter(models.Mantenimiento.id == mantenimiento_id, models.Mantenimiento.equipo_id == equipo_id)
@@ -124,7 +133,7 @@ def eliminar_mantenimiento(
     equipo_id: int,
     mantenimiento_id: int,
     db: Session = Depends(get_db),
-    _admin: models.Usuario = Depends(requerir_admin),
+    _permiso: models.Usuario = Depends(requerir_permiso("mantenimientos", "editar")),
 ):
     mantenimiento = (
         db.query(models.Mantenimiento)

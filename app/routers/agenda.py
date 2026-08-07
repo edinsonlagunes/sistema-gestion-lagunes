@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from app import models, schemas
 from app.auth import obtener_usuario_actual
 from app.database import get_db
+from app.permisos import requerir_permiso
 from app.zona_horaria import ahora_peru
 
 router = APIRouter(prefix="/agenda", tags=["Agenda del estudio"], dependencies=[Depends(obtener_usuario_actual)])
@@ -20,6 +21,7 @@ def listar_eventos(
     proyecto_id: int | None = None,
     estado: str | None = None,
     db: Session = Depends(get_db),
+    _permiso: models.Usuario = Depends(requerir_permiso("agenda", "ver")),
 ):
     query = db.query(models.EventoAgenda)
     if negocio_id is not None:
@@ -32,7 +34,12 @@ def listar_eventos(
 
 
 @router.get("/proximos", response_model=list[schemas.EventoAgendaOut])
-def eventos_proximos(dias: int = 7, negocio_id: int | None = None, db: Session = Depends(get_db)):
+def eventos_proximos(
+    dias: int = 7,
+    negocio_id: int | None = None,
+    db: Session = Depends(get_db),
+    _permiso: models.Usuario = Depends(requerir_permiso("agenda", "ver")),
+):
     """Eventos pendientes dentro de los próximos N días (para un vistazo rápido de la semana)."""
     limite = ahora_peru() + timedelta(days=dias)
     query = db.query(models.EventoAgenda).filter(
@@ -45,11 +52,15 @@ def eventos_proximos(dias: int = 7, negocio_id: int | None = None, db: Session =
 
 
 @router.post("/", response_model=schemas.EventoAgendaOut)
-def crear_evento(data: schemas.EventoAgendaCreate, db: Session = Depends(get_db)):
+def crear_evento(
+    data: schemas.EventoAgendaCreate,
+    db: Session = Depends(get_db),
+    _permiso: models.Usuario = Depends(requerir_permiso("agenda", "editar")),
+):
     """
-    Agenda una reunión, visita de obra, entrega, u otro evento. Cualquier
-    usuario logueado puede crear y coordinar la agenda — no requiere
-    permisos de administrador, es coordinación operativa, no dinero.
+    Agenda una reunión, visita de obra, entrega, u otro evento. Exige
+    permiso de Agenda (el rol que corresponda decide quién puede
+    coordinarla, ya no depende de ser administrador).
     """
     if not db.query(models.Negocio).get(data.negocio_id):
         raise HTTPException(status_code=404, detail="Negocio no encontrado")
@@ -66,7 +77,12 @@ def crear_evento(data: schemas.EventoAgendaCreate, db: Session = Depends(get_db)
 
 
 @router.patch("/{evento_id}", response_model=schemas.EventoAgendaOut)
-def actualizar_evento(evento_id: int, data: schemas.EventoAgendaUpdate, db: Session = Depends(get_db)):
+def actualizar_evento(
+    evento_id: int,
+    data: schemas.EventoAgendaUpdate,
+    db: Session = Depends(get_db),
+    _permiso: models.Usuario = Depends(requerir_permiso("agenda", "editar")),
+):
     evento = db.query(models.EventoAgenda).get(evento_id)
     if not evento:
         raise HTTPException(status_code=404, detail="Evento no encontrado")
@@ -86,7 +102,11 @@ def actualizar_evento(evento_id: int, data: schemas.EventoAgendaUpdate, db: Sess
 
 
 @router.delete("/{evento_id}", status_code=204)
-def eliminar_evento(evento_id: int, db: Session = Depends(get_db)):
+def eliminar_evento(
+    evento_id: int,
+    db: Session = Depends(get_db),
+    _permiso: models.Usuario = Depends(requerir_permiso("agenda", "editar")),
+):
     evento = db.query(models.EventoAgenda).get(evento_id)
     if not evento:
         raise HTTPException(status_code=404, detail="Evento no encontrado")

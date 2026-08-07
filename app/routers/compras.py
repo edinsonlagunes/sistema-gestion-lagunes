@@ -4,12 +4,17 @@ from sqlalchemy.orm import Session
 from app import models, schemas
 from app.auth import obtener_usuario_actual
 from app.database import get_db
+from app.permisos import requerir_permiso
 
 router = APIRouter(prefix="/compras", tags=["Compras"], dependencies=[Depends(obtener_usuario_actual)])
 
 
 @router.get("/", response_model=list[schemas.Compra])
-def listar_compras(negocio_id: int | None = None, db: Session = Depends(get_db)):
+def listar_compras(
+    negocio_id: int | None = None,
+    db: Session = Depends(get_db),
+    _permiso: models.Usuario = Depends(requerir_permiso("compras", "ver")),
+):
     query = db.query(models.Compra)
     if negocio_id is not None:
         query = query.filter(models.Compra.negocio_id == negocio_id)
@@ -17,7 +22,11 @@ def listar_compras(negocio_id: int | None = None, db: Session = Depends(get_db))
 
 
 @router.post("/", response_model=schemas.Compra)
-def registrar_compra(data: schemas.CompraCreate, db: Session = Depends(get_db)):
+def registrar_compra(
+    data: schemas.CompraCreate,
+    db: Session = Depends(get_db),
+    _permiso: models.Usuario = Depends(requerir_permiso("compras", "editar")),
+):
     """
     Registra una compra de insumo: sube el stock automáticamente. NO
     genera egreso — eso solo pasa cuando se registra un pago real al

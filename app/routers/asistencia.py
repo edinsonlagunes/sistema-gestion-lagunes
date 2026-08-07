@@ -1,4 +1,4 @@
-from datetime import date, datetime, timedelta
+from datetime import date, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from app import models, schemas
 from app.auth import obtener_usuario_actual
 from app.database import get_db
+from app.permisos import requerir_permiso
 from app.zona_horaria import ahora_peru
 
 router = APIRouter(prefix="/asistencia", tags=["Asistencia"], dependencies=[Depends(obtener_usuario_actual)])
@@ -30,6 +31,11 @@ def _a_schema(registro: models.Asistencia) -> schemas.Asistencia:
 
 @router.post("/entrada", response_model=schemas.Asistencia)
 def marcar_entrada(data: schemas.AsistenciaMarcarRequest, db: Session = Depends(get_db)):
+    """
+    Marca la propia entrada. A propósito NO exige permiso de Asistencia
+    — fichar es algo que cualquier persona con sesión necesita poder
+    hacer, sin depender de su rol.
+    """
     colaborador = db.query(models.Colaborador).get(data.colaborador_id)
     if not colaborador:
         raise HTTPException(status_code=404, detail="Colaborador no encontrado")
@@ -57,6 +63,7 @@ def marcar_entrada(data: schemas.AsistenciaMarcarRequest, db: Session = Depends(
 
 @router.post("/salida", response_model=schemas.Asistencia)
 def marcar_salida(data: schemas.AsistenciaMarcarRequest, db: Session = Depends(get_db)):
+    """Marca la propia salida. Sin restricción de permiso, mismo criterio que marcar entrada."""
     registro = (
         db.query(models.Asistencia)
         .filter(
@@ -79,8 +86,12 @@ def marcar_salida(data: schemas.AsistenciaMarcarRequest, db: Session = Depends(g
 
 
 @router.get("/en-turno", response_model=list[schemas.Asistencia])
-def en_turno(negocio_id: int | None = None, db: Session = Depends(get_db)):
-    """Quién tiene la entrada marcada y todavía no ha marcado salida."""
+def en_turno(
+    negocio_id: int | None = None,
+    db: Session = Depends(get_db),
+    _permiso: models.Usuario = Depends(requerir_permiso("asistencia", "ver")),
+):
+    """Quién tiene la entrada marcada y todavía no ha marcado salida. Exige permiso de Asistencia."""
     query = db.query(models.Asistencia).filter(models.Asistencia.hora_salida.is_(None))
     if negocio_id is not None:
         query = query.join(models.Colaborador).filter(models.Colaborador.negocio_id == negocio_id)
@@ -94,11 +105,13 @@ def listar_asistencia(
     fecha: date | None = None,
     dias: int | None = None,
     db: Session = Depends(get_db),
+    _permiso: models.Usuario = Depends(requerir_permiso("asistencia", "ver")),
 ):
     """
     Historial de entradas/salidas. `dias` (ej. 14) limita a los últimos
     N días sin tener que pedir una fecha exacta — útil para ver el
-    horario reciente de todo un negocio de un vistazo.
+    horario reciente de todo un negocio de un vistazo. Exige permiso
+    de Asistencia.
     """
     query = db.query(models.Asistencia)
     if colaborador_id is not None:
