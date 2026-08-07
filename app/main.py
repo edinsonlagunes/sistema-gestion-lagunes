@@ -7,6 +7,7 @@ from app.database import Base, SessionLocal, engine
 from app.routers import (
     agenda,
     asistencia,
+    avance_obra,
     caja,
     caja_chica,
     clientes,
@@ -67,6 +68,7 @@ app.include_router(asistencia.router)
 app.include_router(impresiones.router)
 app.include_router(email.router)
 app.include_router(roles.router)
+app.include_router(avance_obra.router)
 
 
 def _job_documentos_por_vencer():

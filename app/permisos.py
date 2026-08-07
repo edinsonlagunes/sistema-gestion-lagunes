@@ -19,7 +19,7 @@ from app.database import get_db
 MODULOS_SISTEMA = [
     "proyectos", "compras", "colaboradores", "finanzas", "documentos",
     "caja_chica", "planillas", "asistencia", "ventas_impresiones",
-    "conciliacion", "mantenimientos", "agenda",
+    "conciliacion", "mantenimientos", "agenda", "avance_obra",
 ]
 
 NIVELES_VALIDOS = ["sin_acceso", "ver", "editar"]

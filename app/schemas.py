@@ -948,3 +948,38 @@ class PermisoEspecialOut(BaseModel):
     modulo: str
     nivel: str
     otorgado_en: datetime
+
+
+# ---------- Avance de obra (reportes de campo) ----------
+class PartidaCreate(BaseModel):
+    nombre: str
+    orden: int = 0
+
+
+class PartidaUpdate(BaseModel):
+    nombre: Optional[str] = None
+    orden: Optional[int] = None
+
+
+class PartidaOut(BaseModel):
+    id: int
+    proyecto_id: int
+    nombre: str
+    orden: int
+    porcentaje_avance: float
+    ultimo_reporte_fecha: Optional[datetime] = None
+
+
+class ReporteAvanceOut(BaseModel):
+    id: int
+    partida_id: int
+    colaborador_id: Optional[int] = None
+    colaborador_nombre: Optional[str] = None
+    fecha: datetime
+    porcentaje_avance: float
+    descripcion: Optional[str] = None
+    tiene_incidencia: bool
+    incidencia_gravedad: Optional[str] = None
+    incidencia_descripcion: Optional[str] = None
+    incidencia_resuelta: Optional[bool] = None
+    fotos: list[str]

@@ -21,7 +21,7 @@ from app.database import SessionLocal, engine
 # IMPORTANTE: antes de correr la migración, cambia esto por tu username
 # real de administrador (el que usas para iniciar sesión en el sistema).
 # Sirve para marcarte como superadministrador con acceso total.
-USUARIO_SUPERADMIN = "admin"
+USUARIO_SUPERADMIN = "CAMBIAR_POR_TU_USERNAME"
 
 
 def _tiene_columna(inspector, tabla, columna):
@@ -365,7 +365,7 @@ def crear_negocio_constructora():
 MODULOS_INICIALES = [
     "proyectos", "compras", "colaboradores", "finanzas", "documentos",
     "caja_chica", "planillas", "asistencia", "ventas_impresiones",
-    "conciliacion", "mantenimientos", "agenda",
+    "conciliacion", "mantenimientos", "agenda", "avance_obra",
 ]
 
 # Roles de partida sugeridos — se pueden editar, renombrar o borrar
@@ -447,6 +447,40 @@ def marcar_superadmin():
         db.close()
 
 
+def agregar_permisos_nuevos_modulos():
+    """
+    Cuando se agrega un módulo nuevo al sistema (como "avance_obra"),
+    los roles que ya existían no tienen ninguna fila de permiso para
+    él — nivel_efectivo() ya lo trata como "sin_acceso" por defecto,
+    así que no rompe nada, pero el rol "Administrador" sí debe quedar
+    con acceso total automáticamente, ya que representa acceso
+    completo a todo el sistema. Idempotente.
+    """
+    db = SessionLocal()
+    try:
+        admin_rol = db.query(models.Rol).filter(models.Rol.nombre == "Administrador").first()
+        if not admin_rol:
+            print("No existe el rol 'Administrador' — nada que actualizar.")
+            return
+        agregados = 0
+        for modulo in MODULOS_INICIALES:
+            existente = (
+                db.query(models.PermisoRol)
+                .filter(models.PermisoRol.rol_id == admin_rol.id, models.PermisoRol.modulo == modulo)
+                .first()
+            )
+            if not existente:
+                db.add(models.PermisoRol(rol_id=admin_rol.id, modulo=modulo, nivel="editar"))
+                agregados += 1
+        if agregados:
+            print(f"Se agregaron {agregados} permiso(s) nuevo(s) al rol 'Administrador'.")
+        else:
+            print("El rol 'Administrador' ya tenía todos los módulos — nada que agregar.")
+        db.commit()
+    finally:
+        db.close()
+
+
 def migrar():
     migrar_columnas()
     fix_ingresos_proyecto()
@@ -458,6 +492,7 @@ def migrar():
     crear_negocio_constructora()
     seed_roles_iniciales()
     marcar_superadmin()
+    agregar_permisos_nuevos_modulos()
     print("Migración completa.")
 
 

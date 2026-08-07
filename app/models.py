@@ -426,6 +426,9 @@ class Proyecto(Base):
     ampliaciones = relationship(
         "AmpliacionPlazo", back_populates="proyecto", cascade="all, delete-orphan", order_by="AmpliacionPlazo.fecha_registro"
     )
+    partidas = relationship(
+        "Partida", back_populates="proyecto", cascade="all, delete-orphan", order_by="Partida.orden"
+    )
 
 
 class AmpliacionPlazo(Base):
@@ -634,3 +637,60 @@ class RegistroImpresion(Base):
 
     negocio = relationship("Negocio")
     colaborador = relationship("Colaborador")
+
+
+class Partida(Base):
+    """
+    Una etapa o partida de obra dentro de un proyecto (cimentación,
+    estructura, acabados, instalaciones, etc.) — catálogo editable por
+    proyecto, sobre el que se reporta el avance desde campo. El
+    porcentaje de avance de una partida es el de su reporte más
+    reciente (no se guarda aparte, para no tener dos fuentes de verdad).
+    """
+    __tablename__ = "partidas"
+
+    id = Column(Integer, primary_key=True, index=True)
+    proyecto_id = Column(Integer, ForeignKey("proyectos.id"), nullable=False)
+    nombre = Column(String, nullable=False)
+    orden = Column(Integer, nullable=False, default=0)
+
+    proyecto = relationship("Proyecto", back_populates="partidas")
+    reportes = relationship(
+        "ReporteAvance", back_populates="partida", cascade="all, delete-orphan", order_by="ReporteAvance.fecha"
+    )
+
+
+class ReporteAvance(Base):
+    """
+    Un reporte de avance de campo sobre una partida específica: el
+    nuevo porcentaje (valor absoluto, no incremento), una descripción
+    de lo realizado, fotos, y opcionalmente una incidencia (problema,
+    retraso, algo que requiere atención).
+    """
+    __tablename__ = "reportes_avance"
+
+    id = Column(Integer, primary_key=True, index=True)
+    partida_id = Column(Integer, ForeignKey("partidas.id"), nullable=False)
+    colaborador_id = Column(Integer, ForeignKey("colaboradores.id"), nullable=True)
+    fecha = Column(DateTime, default=ahora_peru)
+    porcentaje_avance = Column(Float, nullable=False)
+    descripcion = Column(String, nullable=True)
+    tiene_incidencia = Column(Boolean, nullable=False, default=False)
+    incidencia_gravedad = Column(String, nullable=True)  # baja, media, alta
+    incidencia_descripcion = Column(String, nullable=True)
+    incidencia_resuelta = Column(Boolean, nullable=True)
+
+    partida = relationship("Partida", back_populates="reportes")
+    colaborador = relationship("Colaborador")
+    fotos = relationship("FotoAvance", back_populates="reporte", cascade="all, delete-orphan")
+
+
+class FotoAvance(Base):
+    """Una foto asociada a un reporte de avance. Solo se guarda la URL — el archivo vive en Cloudinary."""
+    __tablename__ = "fotos_avance"
+
+    id = Column(Integer, primary_key=True, index=True)
+    reporte_id = Column(Integer, ForeignKey("reportes_avance.id"), nullable=False)
+    url = Column(String, nullable=False)
+
+    reporte = relationship("ReporteAvance", back_populates="fotos")
