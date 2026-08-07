@@ -75,6 +75,11 @@ def respaldar_base_de_datos() -> dict:
 
     cloudinary.config(cloud_name=cloud_name, api_key=api_key, api_secret=api_secret, secure=True)
 
+    diagnostico = (
+        f"[diagnóstico: cloud_name='{cloud_name}' ({len(cloud_name)} caracteres), "
+        f"api_key {len(api_key)} caracteres, api_secret {len(api_secret)} caracteres]"
+    )
+
     try:
         datos = _generar_respaldo()
         contenido = json.dumps(datos, ensure_ascii=False).encode("utf-8")
@@ -92,4 +97,4 @@ def respaldar_base_de_datos() -> dict:
             "enlace": resultado.get("secure_url"),
         }
     except Exception as error:
-        return {"exitoso": False, "mensaje": f"Error al generar el respaldo: {error}", "enlace": None}
+        return {"exitoso": False, "mensaje": f"Error al generar el respaldo: {error} {diagnostico}", "enlace": None}
