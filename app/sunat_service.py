@@ -37,7 +37,7 @@ def siguiente_correlativo(db, negocio_id: int, tipo: str) -> tuple[str, int]:
     emisiones al mismo tiempo no repitan número). Crea la serie con un
     valor por defecto la primera vez que se usa ese negocio + tipo.
     """
-    serie_default = "F001" if tipo == "factura" else "B001"
+    serie_default = "FFF1" if tipo == "factura" else "BBB1"
     registro = (
         db.query(models.SerieComprobante)
         .filter(models.SerieComprobante.negocio_id == negocio_id, models.SerieComprobante.tipo == tipo)

@@ -462,6 +462,31 @@ def marcar_superadmin():
         db.close()
 
 
+def corregir_series_comprobante():
+    """
+    Las primeras pruebas de facturación electrónica usaron series de
+    ejemplo ("F001"/"B001") que no coinciden con las reales de la
+    cuenta de NubeFacT (que resultaron ser "FFF1"/"BBB1"). Esto borra
+    esas filas mal creadas para que se vuelvan a generar solas con la
+    serie correcta la próxima vez que se use. Idempotente — si ya no
+    quedan filas con las series viejas, no hace nada.
+    """
+    db = SessionLocal()
+    try:
+        borradas = (
+            db.query(models.SerieComprobante)
+            .filter(models.SerieComprobante.serie.in_(["F001", "B001"]))
+            .delete(synchronize_session=False)
+        )
+        if borradas:
+            print(f"Se corrigieron {borradas} serie(s) de comprobante con el valor de ejemplo antiguo.")
+        else:
+            print("No había series de comprobante con el valor de ejemplo antiguo — nada que corregir.")
+        db.commit()
+    finally:
+        db.close()
+
+
 def agregar_permisos_nuevos_modulos():
     """
     Cuando se agrega un módulo nuevo al sistema (como "avance_obra"),
@@ -508,6 +533,7 @@ def migrar():
     seed_roles_iniciales()
     marcar_superadmin()
     agregar_permisos_nuevos_modulos()
+    corregir_series_comprobante()
     print("Migración completa.")
 
 
