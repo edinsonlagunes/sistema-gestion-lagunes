@@ -3,6 +3,7 @@ from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
 
 from app import models
+from app.backup_service import respaldar_base_de_datos
 from app.email_service import enviar_alerta
 from app.zona_horaria import ahora_peru
 
@@ -290,3 +291,28 @@ def revisar_stock_bajo(db: Session) -> bool:
         asunto=f"Alerta: {len(filas_data)} insumo(s) con stock bajo",
         cuerpo_html=cuerpo_html,
     )
+
+
+def ejecutar_respaldo_diario() -> bool:
+    """
+    Genera el respaldo diario de la base de datos y avisa por correo el
+    resultado. A diferencia de las demás alertas, esta SIEMPRE manda
+    correo (éxito o falla) — el silencio en un respaldo es peligroso:
+    si el proceso dejara de correr un día, nadie se enteraría.
+    """
+    resultado = respaldar_base_de_datos()
+    if resultado["exitoso"]:
+        asunto = "Respaldo diario completado"
+        cuerpo_html = f"""
+        <h2>Respaldo diario completado</h2>
+        <p>{resultado['mensaje']}</p>
+        <p><a href="{resultado['enlace']}">Descargar el archivo de respaldo</a></p>
+        """
+    else:
+        asunto = "ALERTA: el respaldo diario falló"
+        cuerpo_html = f"""
+        <h2 style="color:#b91c1c">El respaldo diario de hoy falló</h2>
+        <p>{resultado['mensaje']}</p>
+        <p>Revisa los logs de Railway para más detalle.</p>
+        """
+    return enviar_alerta(asunto=asunto, cuerpo_html=cuerpo_html)

@@ -3,6 +3,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.alertas import (
+    ejecutar_respaldo_diario,
     revisar_cobros_pendientes,
     revisar_conciliacion,
     revisar_documentos_por_vencer,
@@ -112,7 +113,12 @@ def _job_stock_bajo():
         db.close()
 
 
+def _job_respaldo_diario():
+    ejecutar_respaldo_diario()
+
+
 scheduler = BackgroundScheduler(timezone="America/Lima")
+scheduler.add_job(_job_respaldo_diario, "cron", hour=3, minute=0)
 scheduler.add_job(_job_documentos_por_vencer, "cron", hour=7, minute=0)
 scheduler.add_job(_job_cobros_pendientes, "cron", hour=7, minute=5)
 scheduler.add_job(_job_conciliacion, "cron", hour=7, minute=10)

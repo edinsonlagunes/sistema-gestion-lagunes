@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from app.alertas import (
+    ejecutar_respaldo_diario,
     revisar_cobros_pendientes,
     revisar_conciliacion,
     revisar_documentos_por_vencer,
@@ -97,3 +98,14 @@ def revisar_stock(usuario=Depends(requerir_admin), db: Session = Depends(get_db)
             else "No hay insumos con stock bajo en este momento — no se envió correo."
         ),
     }
+
+
+@router.post("/ejecutar-respaldo")
+def ejecutar_respaldo(usuario=Depends(requerir_admin)):
+    """
+    Dispara manualmente el respaldo diario de la base de datos (el
+    mismo que corre solo todos los días). Útil para probarlo sin
+    esperar a la hora programada.
+    """
+    enviado = ejecutar_respaldo_diario()
+    return {"correo_enviado": enviado}
