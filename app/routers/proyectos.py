@@ -7,6 +7,7 @@ from app import models, schemas
 from app.auth import obtener_usuario_actual
 from app.database import get_db
 from app.permisos import requerir_permiso
+from app.sunat_service import emitir_comprobante, siguiente_correlativo
 from app.zona_horaria import ahora_peru
 
 router = APIRouter(prefix="/proyectos", tags=["Proyectos (Constructora)"], dependencies=[Depends(obtener_usuario_actual)])
@@ -350,6 +351,54 @@ def registrar_pago(
 
     db.commit()
     db.refresh(proyecto)
+
+    if data.tipo_comprobante in ("factura", "boleta"):
+        cliente = db.query(models.Cliente).get(proyecto.cliente_id)
+        serie, numero = siguiente_correlativo(db, proyecto.negocio_id, data.tipo_comprobante)
+        etiquetas_tipo = {"adelanto": "Adelanto", "cuota": "Cuota", "pago_final": "Pago final", "otro": "Pago"}
+        subtotal = round(pago.monto / 1.18, 2)
+        igv = round(pago.monto - subtotal, 2)
+        items_sunat = [
+            {
+                "descripcion": f"{etiquetas_tipo.get(pago.tipo, 'Pago')} - Proyecto '{proyecto.nombre}'",
+                "cantidad": 1,
+                "valor_unitario": subtotal,
+                "precio_unitario": pago.monto,
+                "subtotal": subtotal,
+                "igv": igv,
+                "total": pago.monto,
+            }
+        ]
+        resultado = emitir_comprobante(
+            tipo=data.tipo_comprobante,
+            serie=serie,
+            numero=numero,
+            cliente_nombre=cliente.nombre if cliente else "Cliente",
+            cliente_documento_tipo=cliente.documento_tipo if cliente else None,
+            cliente_documento_numero=cliente.documento_numero if cliente else None,
+            items=items_sunat,
+        )
+        db.add(
+            models.ComprobanteElectronico(
+                negocio_id=proyecto.negocio_id,
+                tipo=data.tipo_comprobante,
+                serie=serie,
+                numero=numero,
+                cliente_nombre=cliente.nombre if cliente else "Cliente",
+                cliente_documento_tipo=cliente.documento_tipo if cliente else None,
+                cliente_documento_numero=cliente.documento_numero if cliente else None,
+                subtotal=subtotal,
+                igv=igv,
+                total=pago.monto,
+                estado_sunat=resultado["estado"],
+                enlace_pdf=resultado["enlace_pdf"],
+                enlace_xml=resultado["enlace_xml"],
+                respuesta_sunat=resultado["mensaje"],
+                pago_proyecto_id=pago.id,
+            )
+        )
+        db.commit()
+
     return _a_detalle(proyecto)
 
 

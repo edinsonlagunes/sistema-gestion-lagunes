@@ -159,6 +159,21 @@ def migrar_columnas():
         else:
             print("usuarios.es_superadmin ya existe — nada que hacer.")
 
+        # --- Facturación electrónica (SUNAT / NubeFacT) ---
+        if not _tiene_columna(inspector, "clientes", "documento_tipo"):
+            print("Agregando columna documento_tipo a clientes...")
+            conn.execute(text("ALTER TABLE clientes ADD COLUMN documento_tipo VARCHAR"))
+            conn.commit()
+        else:
+            print("clientes.documento_tipo ya existe — nada que hacer.")
+
+        if not _tiene_columna(inspector, "clientes", "documento_numero"):
+            print("Agregando columna documento_numero a clientes...")
+            conn.execute(text("ALTER TABLE clientes ADD COLUMN documento_numero VARCHAR"))
+            conn.commit()
+        else:
+            print("clientes.documento_numero ya existe — nada que hacer.")
+
 
 def fix_ingresos_proyecto():
     """

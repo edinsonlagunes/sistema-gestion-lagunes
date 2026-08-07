@@ -398,6 +398,8 @@ class Cliente(Base):
     id = Column(Integer, primary_key=True, index=True)
     nombre = Column(String, nullable=False)
     contacto = Column(String, nullable=True)
+    documento_tipo = Column(String, nullable=True)  # RUC (factura) o DNI (boleta)
+    documento_numero = Column(String, nullable=True)
 
     proyectos = relationship("Proyecto", back_populates="cliente")
 
@@ -694,3 +696,54 @@ class FotoAvance(Base):
     url = Column(String, nullable=False)
 
     reporte = relationship("ReporteAvance", back_populates="fotos")
+
+
+class SerieComprobante(Base):
+    """
+    Serie y siguiente correlativo disponible para cada negocio + tipo de
+    comprobante (ej. Imprenta + boleta = serie "B001"). SUNAT exige que
+    el correlativo suba de 1 en 1, sin saltos ni repetirse — esta tabla
+    es la única fuente de verdad para el siguiente número.
+    """
+    __tablename__ = "series_comprobante"
+
+    id = Column(Integer, primary_key=True, index=True)
+    negocio_id = Column(Integer, ForeignKey("negocios.id"), nullable=False)
+    tipo = Column(String, nullable=False)  # factura, boleta
+    serie = Column(String, nullable=False)  # "F001", "B001"
+    siguiente_numero = Column(Integer, nullable=False, default=1)
+
+    negocio = relationship("Negocio")
+
+
+class ComprobanteElectronico(Base):
+    """
+    Registro de cada factura/boleta electrónica emitida vía el OSE
+    (NubeFacT). Guarda el resultado real de SUNAT, no solo la intención
+    de facturar — para tener trazabilidad completa y poder reintentar
+    si algo falló.
+    """
+    __tablename__ = "comprobantes_electronicos"
+
+    id = Column(Integer, primary_key=True, index=True)
+    negocio_id = Column(Integer, ForeignKey("negocios.id"), nullable=False)
+    tipo = Column(String, nullable=False)  # factura, boleta
+    serie = Column(String, nullable=False)
+    numero = Column(Integer, nullable=False)
+    cliente_nombre = Column(String, nullable=False)
+    cliente_documento_tipo = Column(String, nullable=True)
+    cliente_documento_numero = Column(String, nullable=True)
+    subtotal = Column(Float, nullable=False)
+    igv = Column(Float, nullable=False)
+    total = Column(Float, nullable=False)
+    fecha_emision = Column(DateTime, default=ahora_peru)
+    estado_sunat = Column(String, nullable=False, default="pendiente")  # pendiente, aceptado, rechazado, observado
+    enlace_pdf = Column(String, nullable=True)
+    enlace_xml = Column(String, nullable=True)
+    respuesta_sunat = Column(String, nullable=True)
+    venta_id = Column(Integer, ForeignKey("ventas.id"), nullable=True)
+    pago_proyecto_id = Column(Integer, ForeignKey("pagos_proyecto.id"), nullable=True)
+
+    negocio = relationship("Negocio")
+    venta = relationship("Venta")
+    pago_proyecto = relationship("PagoProyecto")

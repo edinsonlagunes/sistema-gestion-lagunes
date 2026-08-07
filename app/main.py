@@ -13,6 +13,7 @@ from app.routers import (
     clientes,
     colaboradores,
     compras,
+    comprobantes,
     documentos,
     email,
     finanzas,
@@ -69,6 +70,7 @@ app.include_router(impresiones.router)
 app.include_router(email.router)
 app.include_router(roles.router)
 app.include_router(avance_obra.router)
+app.include_router(comprobantes.router)
 
 
 def _job_documentos_por_vencer():

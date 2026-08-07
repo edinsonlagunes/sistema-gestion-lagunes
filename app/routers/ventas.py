@@ -5,6 +5,7 @@ from app import models, schemas
 from app.auth import obtener_usuario_actual
 from app.database import get_db
 from app.permisos import requerir_permiso
+from app.sunat_service import emitir_comprobante, siguiente_correlativo
 
 router = APIRouter(prefix="/ventas", tags=["Ventas (POS)"], dependencies=[Depends(obtener_usuario_actual)])
 
@@ -100,6 +101,51 @@ def registrar_venta(
 
     db.commit()
     db.refresh(venta)
+
+    if data.tipo_comprobante in ("factura", "boleta"):
+        serie, numero = siguiente_correlativo(db, data.negocio_id, data.tipo_comprobante)
+        items_sunat = [
+            {
+                "descripcion": it.servicio.nombre,
+                "cantidad": it.cantidad,
+                "valor_unitario": round(it.precio_unitario / 1.18, 2),
+                "precio_unitario": it.precio_unitario,
+                "subtotal": round(it.subtotal / 1.18, 2),
+                "igv": round(it.subtotal - (it.subtotal / 1.18), 2),
+                "total": it.subtotal,
+            }
+            for it in venta.items
+        ]
+        resultado = emitir_comprobante(
+            tipo=data.tipo_comprobante,
+            serie=serie,
+            numero=numero,
+            cliente_nombre=data.cliente or "Cliente varios",
+            cliente_documento_tipo=data.cliente_documento_tipo,
+            cliente_documento_numero=data.cliente_documento_numero,
+            items=items_sunat,
+        )
+        db.add(
+            models.ComprobanteElectronico(
+                negocio_id=data.negocio_id,
+                tipo=data.tipo_comprobante,
+                serie=serie,
+                numero=numero,
+                cliente_nombre=data.cliente or "Cliente varios",
+                cliente_documento_tipo=data.cliente_documento_tipo,
+                cliente_documento_numero=data.cliente_documento_numero,
+                subtotal=sum(i["subtotal"] for i in items_sunat),
+                igv=sum(i["igv"] for i in items_sunat),
+                total=venta.total,
+                estado_sunat=resultado["estado"],
+                enlace_pdf=resultado["enlace_pdf"],
+                enlace_xml=resultado["enlace_xml"],
+                respuesta_sunat=resultado["mensaje"],
+                venta_id=venta.id,
+            )
+        )
+        db.commit()
+
     return venta
 
 

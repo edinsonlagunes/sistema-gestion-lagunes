@@ -303,6 +303,8 @@ class VentaCreate(BaseModel):
     medio_pago: str = "efectivo"
     cliente: Optional[str] = None
     tipo_comprobante: Optional[str] = None
+    cliente_documento_tipo: Optional[str] = None  # RUC (factura) o DNI (boleta)
+    cliente_documento_numero: Optional[str] = None
     items: list[VentaItemCreate]
 
 
@@ -340,10 +342,19 @@ class TipoProyecto(BaseModel):
 class ClienteBase(BaseModel):
     nombre: str
     contacto: Optional[str] = None
+    documento_tipo: Optional[str] = None  # RUC (factura) o DNI (boleta)
+    documento_numero: Optional[str] = None
 
 
 class ClienteCreate(ClienteBase):
     pass
+
+
+class ClienteUpdate(BaseModel):
+    nombre: Optional[str] = None
+    contacto: Optional[str] = None
+    documento_tipo: Optional[str] = None
+    documento_numero: Optional[str] = None
 
 
 class Cliente(ClienteBase):
@@ -983,3 +994,26 @@ class ReporteAvanceOut(BaseModel):
     incidencia_descripcion: Optional[str] = None
     incidencia_resuelta: Optional[bool] = None
     fotos: list[str]
+
+
+# ---------- Comprobantes electrónicos (SUNAT / NubeFacT) ----------
+class ComprobanteElectronicoOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    negocio_id: int
+    tipo: str
+    serie: str
+    numero: int
+    cliente_nombre: str
+    cliente_documento_tipo: Optional[str] = None
+    cliente_documento_numero: Optional[str] = None
+    subtotal: float
+    igv: float
+    total: float
+    fecha_emision: datetime
+    estado_sunat: str
+    enlace_pdf: Optional[str] = None
+    enlace_xml: Optional[str] = None
+    respuesta_sunat: Optional[str] = None
+    venta_id: Optional[int] = None
+    pago_proyecto_id: Optional[int] = None
