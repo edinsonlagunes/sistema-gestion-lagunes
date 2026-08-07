@@ -156,10 +156,15 @@ def emitir_comprobante(
         }
 
     aceptado = bool(datos.get("aceptada_por_sunat"))
+    mensaje = datos.get("sunat_description") or datos.get("sunat_note") or ""
+    if not mensaje:
+        # No vino en los campos esperados — guardamos la respuesta completa
+        # para poder ver cómo se llama el campo correcto en la práctica.
+        mensaje = f"[respuesta completa, campo de mensaje no identificado] {datos}"
     return {
         "aceptado": aceptado,
         "estado": "aceptado" if aceptado else "observado",
-        "mensaje": datos.get("sunat_description") or datos.get("sunat_note") or "",
+        "mensaje": mensaje,
         "enlace_pdf": datos.get("enlace_del_pdf") or datos.get("enlace"),
         "enlace_xml": datos.get("enlace_del_xml"),
     }
