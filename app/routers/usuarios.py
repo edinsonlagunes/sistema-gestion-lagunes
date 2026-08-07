@@ -2,9 +2,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app import models, schemas
-from app.auth import crear_token, requerir_admin, requerir_superadmin
+from app.auth import crear_token, requerir_superadmin
 from app.database import get_db
-from app.permisos import permisos_de_usuario
+from app.permisos import permisos_de_usuario, requerir_permiso
 from app.security import hash_password, verify_password
 
 router = APIRouter(prefix="/usuarios", tags=["Usuarios"])
@@ -20,9 +20,9 @@ def listar_usuarios(db: Session = Depends(get_db), _superadmin: models.Usuario =
 def crear_usuario(
     data: schemas.UsuarioCreate,
     db: Session = Depends(get_db),
-    _admin: models.Usuario = Depends(requerir_admin),
+    _permiso: models.Usuario = Depends(requerir_permiso("colaboradores", "editar")),
 ):
-    """Solo un administrador puede dar de alta nuevos usuarios."""
+    """Exige permiso de 'Editar' en Colaboradores — quien gestiona al personal puede darle su acceso al sistema."""
     colaborador = db.query(models.Colaborador).get(data.colaborador_id)
     if not colaborador:
         raise HTTPException(status_code=404, detail="Colaborador no encontrado")
